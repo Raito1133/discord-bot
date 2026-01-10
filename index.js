@@ -592,4 +592,5 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
 });
 
 // --- IMPORTANT: PASTE YOUR TOKEN HERE ---
+console.log('Starting bot, trying to login...');
 client.login(process.env.TOKEN);
