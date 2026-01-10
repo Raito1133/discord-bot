@@ -592,4 +592,4 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
 });
 
 // --- IMPORTANT: PASTE YOUR TOKEN HERE ---
-client.login('client.login(process.env.TOKEN);');
+client.login(process.env.TOKEN);
