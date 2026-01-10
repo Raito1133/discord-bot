@@ -601,4 +601,5 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
 });
 
 // --- IMPORTANT: PASTE YOUR TOKEN HERE ---
-client.login('MTQ1OTM4MzAzMDgxOTk4MzUxNQ.G-3mzR.-uwcrzM1BfTcxrRHDPx-U4ZE64HMuUE-J2wdOs');
+
+client.login(process.env.TOKEN);
