@@ -18,7 +18,7 @@ const {
 } = require('discord.js');
 
 // --- ⚠️ CONFIGURATION ⚠️ ---
-const GUILD_ID = '1243470533316579361'; // Your Server ID
+const GUILD_ID = '1243470533316579361'; 
 
 // PASTE THE ROLE ID OF THE ADMINS/MODS YOU WANT PINGED IN TICKETS:
 const TICKET_SUPPORT_ROLE = '1249714120853553172'; 
@@ -81,7 +81,8 @@ const commands = [
     ],
     default_member_permissions: '8'
   },
-  // === NEW EMBED COMMAND ===
+  { name: 'me', description: 'Credits' },
+  // === CUSTOM EMBED COMMAND ===
   {
     name: 'embed',
     description: 'Create a custom embedded message',
@@ -113,98 +114,27 @@ const commands = [
   { name: 'afk', description: 'Set status to AFK', options: [{ name: 'reason', description: 'Reason', type: 3, required: false }] },
   { name: 'snipe', description: 'Show last deleted msg' },
   { name: 'help', description: 'Show commands' },
-  { name: 'me', description: 'Credits' },
   { name: 'userinfo', description: 'Get user info', options: [{ name: 'user', description: 'User', type: 6, required: false }] },
   { name: 'avatar', description: 'Get avatar', options: [{ name: 'user', description: 'User', type: 6, required: false }] },
-  {
-    name: 'welcome-setup',
-    description: 'Setup welcome message',
-    options: [
-      { name: 'channel', description: 'Channel', type: 7, required: true },
-      { name: 'message', description: 'Message', type: 3, required: false },
-      { name: 'type', description: 'Style', type: 3, required: false, choices: [{ name: 'Text', value: 'text' }, { name: 'Embed', value: 'embed' }] },
-      { name: 'image_url', description: 'Image Link (GIF/PNG) for Embed', type: 3, required: false },
-      { name: 'color', description: 'Hex Color (e.g. #FF0000)', type: 3, required: false }
-    ],
-    default_member_permissions: '8'
-  },
-  { 
-    name: 'leave-setup', 
-    description: 'Setup leave message', 
-    options: [
-        { name: 'channel', description: 'Channel', type: 7, required: true }, 
-        { name: 'message', description: 'Message', type: 3, required: false }
-    ], 
-    default_member_permissions: '8' 
-  },
-  { 
-    name: 'ticketsetup', 
-    description: 'Create ticket panel', 
-    options: [
-        { name: 'channel', description: 'Where to post the panel', type: 7, required: true }, 
-        { name: 'category', description: 'Where to open tickets', type: 7, channel_types: [4], required: false }, 
-        { name: 'title', description: 'Panel Title', type: 3, required: false },
-        { name: 'description', description: 'Panel Description', type: 3, required: false }
-    ], 
-    default_member_permissions: '8' 
-  },
-  { 
-    name: 'autoreact-setup', 
-    description: 'Auto-react setup', 
-    options: [
-      { name: 'emoji', description: 'Which emoji?', type: 3, required: true },
-      { name: 'role', description: 'Optional: Filter by this Role', type: 8, required: false } 
-    ], 
-    default_member_permissions: '8' 
-  },
-  { 
-    name: 'autorole-setup', 
-    description: 'Set auto role', 
-    options: [
-      { name: 'role', description: 'Role to give new members', type: 8, required: true }
-    ], 
-    default_member_permissions: '8' 
-  },
-  { 
-    name: 'skullboard-setup', 
-    description: 'Skullboard setup', 
-    options: [
-      { name: 'channel', description: 'Where to log skulls', type: 7, required: true }
-    ], 
-    default_member_permissions: '8' 
-  },
-  { 
-    name: 'boost-setup', 
-    description: 'Set boost announcement', 
-    options: [
-      { name: 'channel', description: 'Where to announce boosts', type: 7, required: true },
-      { name: 'message', description: 'Custom msg (Use {user})', type: 3, required: false }
-    ], 
-    default_member_permissions: '8' 
-  },
-  { 
-    name: 'reactionrole', 
-    description: 'Reaction Role', 
-    options: [
-      { name: 'role', description: 'Role to give', type: 8, required: true }, 
-      { name: 'description', description: 'Message text', type: 3, required: true }, 
-      { name: 'emoji', description: 'Emoji to click', type: 3, required: false }
-    ], 
-    default_member_permissions: '8' 
-  }
+  { name: 'welcome-setup', description: 'Setup welcome message', options: [{ name: 'channel', description: 'Channel', type: 7, required: true }, { name: 'message', description: 'Message', type: 3, required: false }, { name: 'type', description: 'Style', type: 3, required: false, choices: [{ name: 'Text', value: 'text' }, { name: 'Embed', value: 'embed' }] }, { name: 'image_url', description: 'Image Link (GIF/PNG) for Embed', type: 3, required: false }, { name: 'color', description: 'Hex Color (e.g. #FF0000)', type: 3, required: false }], default_member_permissions: '8' },
+  { name: 'leave-setup', description: 'Setup leave message', options: [{ name: 'channel', description: 'Channel', type: 7, required: true }, { name: 'message', description: 'Message', type: 3, required: false }], default_member_permissions: '8' },
+  { name: 'ticketsetup', description: 'Create ticket panel', options: [{ name: 'channel', description: 'Where to post the panel', type: 7, required: true }, { name: 'category', description: 'Where to open tickets', type: 7, channel_types: [4], required: false }, { name: 'title', description: 'Panel Title', type: 3, required: false }, { name: 'description', description: 'Panel Description', type: 3, required: false }], default_member_permissions: '8' },
+  { name: 'autoreact-setup', description: 'Auto-react setup', options: [{ name: 'emoji', description: 'Which emoji?', type: 3, required: true }, { name: 'role', description: 'Optional: Filter by this Role', type: 8, required: false }], default_member_permissions: '8' },
+  { name: 'autorole-setup', description: 'Set auto role', options: [{ name: 'role', description: 'Role to give new members', type: 8, required: true }], default_member_permissions: '8' },
+  { name: 'skullboard-setup', description: 'Skullboard setup', options: [{ name: 'channel', description: 'Where to log skulls', type: 7, required: true }], default_member_permissions: '8' },
+  { name: 'boost-setup', description: 'Set boost announcement', options: [{ name: 'channel', description: 'Where to announce boosts', type: 7, required: true }, { name: 'message', description: 'Custom msg (Use {user})', type: 3, required: false }], default_member_permissions: '8' },
+  { name: 'reactionrole', description: 'Reaction Role', options: [{ name: 'role', description: 'Role to give', type: 8, required: true }, { name: 'description', description: 'Message text', type: 3, required: true }, { name: 'emoji', description: 'Emoji to click', type: 3, required: false }], default_member_permissions: '8' }
 ];
 
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
   client.user.setActivity('Watching Nocte Server', { type: ActivityType.Listening });
-  
   const rest = new REST().setToken(client.token);
   try {
     if (GUILD_ID === 'PASTE_YOUR_SERVER_ID_HERE') {
-        console.log('⚠️⚠️ ERROR: YOU FORGOT TO PASTE YOUR SERVER ID AT THE TOP! ⚠️⚠️');
+        console.log('⚠️ ERROR: YOU FORGOT TO PASTE YOUR SERVER ID AT THE TOP!');
     } else {
-        // FORCE REFRESH COMMANDS
         console.log('Refreshing commands...');
         await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
         console.log('✅ Commands Registered!');
@@ -212,9 +142,12 @@ client.once(Events.ClientReady, async () => {
   } catch (error) { console.error('Slash error:', error); }
 });
 
-// --- PREFIX HANDLER ---
+// --- PREFIX HANDLER (!) ---
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
+
+  // DEBUGGING: If you don't see this log, your INTENTS are OFF in Dev Portal
+  console.log(`[DEBUG] Message received: ${message.content}`);
 
   // 1. UWU LOCK
   if (uwuTargets.has(message.author.id)) {
@@ -236,18 +169,17 @@ client.on('messageCreate', async message => {
     stickyMessages.set(message.channel.id, stickyData);
   }
 
-  // 3. AFK CHECK
+  // 3. AFK
   if (message.mentions.users.size > 0) {
     message.mentions.users.forEach(user => {
       if (afkUsers.has(user.id)) {
-        const data = afkUsers.get(user.id);
-        message.reply(`💤 **${user.username}** is AFK: ${data.reason} (<t:${Math.floor(data.time/1000)}:R>)`);
+        message.reply(`💤 **${user.username}** is AFK: ${afkUsers.get(user.id).reason}`);
       }
     });
   }
   if (afkUsers.has(message.author.id)) {
     afkUsers.delete(message.author.id);
-    message.reply(`👋 Welcome back **${message.author.username}**! I removed your AFK.`);
+    message.reply(`👋 Welcome back **${message.author.username}**! AFK removed.`);
   }
 
   // 4. AUTO REACT
@@ -269,30 +201,16 @@ client.on('messageCreate', async message => {
   const command = args.shift().toLowerCase();
 
   try {
-    // PREFIX COMMANDS LOGIC
     if (command === 'ping') return message.reply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
     
     if (command === 'talk') {
-        if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+        if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply("❌ You need Admin permissions.");
         message.delete().catch(()=>{});
         return message.channel.send(args.join(' ') || 'What?');
     }
     
-    if (command === 'autoreact') {
-        if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
-        const role = message.mentions.roles.first();
-        const emoji = args[1];
-        if (!role || !emoji) return message.reply('Usage: !autoreact @Role <Emoji>');
-        
-        const cfg = guildSettings.get(message.guild.id) || {};
-        if (!cfg.autoReactRoles) cfg.autoReactRoles = new Map();
-        cfg.autoReactRoles.set(role.id, emoji);
-        guildSettings.set(message.guild.id, cfg);
-        return message.reply(`✅ Auto-react set! Users with **${role.name}** will get ${emoji} reactions.`);
-    }
-    
     if (command === 'ban') {
-        if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+        if(!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return message.reply("❌ You need Ban Members permission.");
         const target = message.mentions.members.first();
         if(!target) return message.reply('Mention someone to ban.');
         if(!target.bannable) return message.reply('❌ Cannot ban (Hierarchy error).');
@@ -301,7 +219,7 @@ client.on('messageCreate', async message => {
     }
     
     if (command === 'kick') {
-        if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+        if(!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return message.reply("❌ You need Kick Members permission.");
         const target = message.mentions.members.first();
         if(!target) return message.reply('Mention someone to kick.');
         if(!target.kickable) return message.reply('❌ Cannot kick (Hierarchy error).');
@@ -309,8 +227,20 @@ client.on('messageCreate', async message => {
         message.reply(`🦵 Kicked **${target.user.tag}**`);
     }
     
+    if (command === 'autoreact') {
+        if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply("❌ You need Admin permissions.");
+        const role = message.mentions.roles.first();
+        const emoji = args[1];
+        if(!role || !emoji) return message.reply('Usage: !autoreact @Role <Emoji>');
+        const cfg = guildSettings.get(message.guild.id) || {};
+        if (!cfg.autoReactRoles) cfg.autoReactRoles = new Map();
+        cfg.autoReactRoles.set(role.id, emoji);
+        guildSettings.set(message.guild.id, cfg);
+        message.reply(`✅ Setup! Users with **${role.name}** will get ${emoji}.`);
+    }
+    
     if (command === 'help') {
-        const embed = new EmbedBuilder().setTitle('Help').setDescription('Commands active.\nUse `/` for slash commands or `!` for prefix.').setColor(0x00AAFF);
+        const embed = new EmbedBuilder().setTitle('Help').setDescription('Commands active.\nUse `/` or `!` commands.').setColor(0x00AAFF);
         message.reply({embeds:[embed]});
     }
     
@@ -322,9 +252,9 @@ client.on('messageCreate', async message => {
   } catch (e) { console.error('Prefix Error:', e); }
 });
 
-// --- SLASH COMMAND HANDLER (FIXED) ---
+// --- SLASH COMMAND HANDLER (/) ---
 client.on('interactionCreate', async interaction => {
-  // BUTTONS & MODALS FIRST
+  // BUTTONS
   if (interaction.isButton()) {
     if (interaction.customId.startsWith('rr_')) {
         const roleId = interaction.customId.split('_')[1];
@@ -357,13 +287,13 @@ client.on('interactionCreate', async interaction => {
     return;
   }
 
+  // MODALS
   if (interaction.isModalSubmit() && interaction.customId === 'ticket_modal') {
     await interaction.deferReply({ ephemeral: true });
     const subject = interaction.fields.getTextInputValue('ticket_subject');
     const desc = interaction.fields.getTextInputValue('ticket_desc');
     const chName = `ticket-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
     const config = guildSettings.get(interaction.guild.id) || {};
-    
     try {
         const ch = await interaction.guild.channels.create({
             name: chName, type: ChannelType.GuildText, parent: config.ticketCategory,
@@ -381,7 +311,7 @@ client.on('interactionCreate', async interaction => {
 
   if (!interaction.isChatInputCommand()) return;
 
-  // --- SLASH COMMAND LOGIC START ---
+  // COMMANDS
   try {
     const { commandName, options } = interaction;
 
@@ -389,18 +319,25 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'purge') {
         await interaction.deferReply({ ephemeral: true }); 
         const amt = options.getInteger('amount');
-        if (amt > 100) return interaction.editReply('❌ Max 100 messages.');
-        await interaction.channel.bulkDelete(amt, true).catch(err => {
-             return interaction.editReply("❌ Could not delete messages (too old?).");
-        });
-        return interaction.editReply(`🗑️ Deleted ${amt} messages.`);
+        if (amt > 100) return interaction.editReply('❌ Max 100.');
+        await interaction.channel.bulkDelete(amt, true).catch(() => interaction.editReply("❌ Error deleting (too old?)."));
+        return interaction.editReply(`🗑️ Deleted ${amt}.`);
     }
 
     // --- STANDARD DEFER ---
     await interaction.deferReply({ ephemeral: false });
 
-    // === NEW EMBED COMMAND LOGIC ===
-    if (commandName === 'embed') {
+    if (commandName === 'ping') interaction.editReply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
+    else if (commandName === 'talk') {
+        await (options.getChannel('channel')||interaction.channel).send(options.getString('message'));
+        interaction.editReply('✅ Sent.');
+    }
+    // === RESTORED /me COMMAND ===
+    else if (commandName === 'me') {
+        interaction.editReply('This bot was made out of boredom by Enkkd.');
+    }
+    // === NEW EMBED COMMAND ===
+    else if (commandName === 'embed') {
         const title = options.getString('title');
         const description = options.getString('description');
         const color = options.getString('color') || '#0099FF';
@@ -411,7 +348,8 @@ client.on('interactionCreate', async interaction => {
 
         const embed = new EmbedBuilder().setColor(color);
         if (title) embed.setTitle(title);
-        if (description) embed.setDescription(description);
+        // Replace literal \n with actual newlines
+        if (description) embed.setDescription(description.replace(/\\n/g, '\n'));
         if (image) embed.setImage(image);
         if (thumbnail) embed.setThumbnail(thumbnail);
         if (footer) embed.setFooter({ text: footer });
@@ -419,120 +357,25 @@ client.on('interactionCreate', async interaction => {
         await targetChannel.send({ embeds: [embed] });
         interaction.editReply({ content: '✅ Embed sent!', ephemeral: true });
     }
-    else if (commandName === 'ping') {
-        interaction.editReply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
-    }
-    else if (commandName === 'talk') {
-        const msg = options.getString('message');
-        const ch = options.getChannel('channel') || interaction.channel;
-        await ch.send(msg);
-        interaction.editReply('✅ Sent.');
-    }
     else if (commandName === 'ban') {
         const user = options.getMember('user');
-        const reason = options.getString('reason') || 'None';
-        if (!user.bannable) return interaction.editReply('❌ I cannot ban them.');
-        await user.ban({ reason });
+        if(!user.bannable) return interaction.editReply('❌ Cannot ban.');
+        await user.ban({ reason: options.getString('reason') });
         interaction.editReply(`✅ Banned **${user.user.tag}**`);
     }
     else if (commandName === 'kick') {
         const user = options.getMember('user');
-        const reason = options.getString('reason') || 'None';
-        if (!user.kickable) return interaction.editReply('❌ I cannot kick them.');
-        await user.kick(reason);
+        if(!user.kickable) return interaction.editReply('❌ Cannot kick.');
+        await user.kick(options.getString('reason'));
         interaction.editReply(`✅ Kicked **${user.user.tag}**`);
-    }
-    else if (commandName === 'mute') {
-        const user = options.getMember('user');
-        const dStr = options.getString('duration');
-        const role = interaction.guild.roles.cache.find(r=>r.name==='Muted');
-        if(!role) return interaction.editReply('❌ "Muted" role missing.');
-        await user.roles.add(role);
-        interaction.editReply(`🤐 Muted **${user.user.tag}**`);
-        const ms = parseDuration(dStr);
-        if(ms) setTimeout(()=> user.roles.remove(role).catch(()=>{}), ms);
-    }
-    else if (commandName === 'unmute') {
-        const user = options.getMember('user');
-        const role = interaction.guild.roles.cache.find(r=>r.name==='Muted');
-        await user.roles.remove(role);
-        interaction.editReply(`🗣️ Unmuted.`);
-    }
-    else if (commandName === 'lock') {
-        await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: false });
-        interaction.editReply('🔒 Locked.');
-    }
-    else if (commandName === 'unlock') {
-        await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: null });
-        interaction.editReply('🔓 Unlocked.');
-    }
-    else if (commandName === 'deafen') {
-        const user = options.getMember('user');
-        if(!user.voice.channel) return interaction.editReply('❌ User not in voice.');
-        await user.voice.setDeaf(true);
-        interaction.editReply(`🔇 Deafened ${user.user.tag}.`);
-    }
-    else if (commandName === 'undeafen') {
-        const user = options.getMember('user');
-        if(!user.voice.channel) return interaction.editReply('❌ User not in voice.');
-        await user.voice.setDeaf(false);
-        interaction.editReply(`🔊 Undeafened ${user.user.tag}.`);
-    }
-    else if (commandName === 'uwulock') {
-        const target = interaction.options.getUser('user');
-        uwuTargets.add(target.id);
-        interaction.editReply(`🌸 **${target.username}** is now UwU locked!`);
-    }
-    else if (commandName === 'uwuunlock') {
-        const target = interaction.options.getUser('user');
-        uwuTargets.delete(target.id);
-        interaction.editReply(`🛑 **${target.username}** is free.`);
-    }
-    else if (commandName === 'stick') {
-        const text = interaction.options.getString('message');
-        const sent = await interaction.channel.send(`**reminder**\n${text}`);
-        stickyMessages.set(interaction.channelId, { content: text, lastMsgId: sent.id });
-        interaction.editReply({content: '✅ Message stuck!', ephemeral: true});
-    }
-    else if (commandName === 'unstick') {
-        if (stickyMessages.has(interaction.channelId)) {
-            const d = stickyMessages.get(interaction.channelId);
-            interaction.channel.messages.delete(d.lastMsgId).catch(()=>{});
-            stickyMessages.delete(interaction.channelId);
-            interaction.editReply('✅ Reminder removed.');
-        } else {
-            interaction.editReply('❌ No sticky message here.');
-        }
-    }
-    else if (commandName === 'afk') {
-        const reason = interaction.options.getString('reason') || 'No reason';
-        afkUsers.set(interaction.user.id, { reason, time: Date.now() });
-        interaction.editReply(`💤 AFK set: ${reason}`);
-    }
-    else if (commandName === 'snipe') {
-        const snipedMsg = snipes.get(interaction.channelId);
-        if (!snipedMsg) return interaction.editReply('❌ Nothing to snipe!');
-        const embed = new EmbedBuilder().setAuthor({ name: snipedMsg.author.tag, iconURL: snipedMsg.author.displayAvatarURL() }).setDescription(snipedMsg.content || '*(Image)*').setColor(0xFF0000).setFooter({text:'Deleted recently'});
-        if(snipedMsg.image) embed.setImage(snipedMsg.image);
-        interaction.editReply({ embeds: [embed] });
     }
     else if (commandName === 'userinfo') {
         const user = options.getMember('user') || interaction.member;
         const embed = new EmbedBuilder().setTitle(`User: ${user.user.tag}`).addFields({name:'Joined', value:`<t:${Math.floor(user.joinedTimestamp/1000)}:R>`}).setColor(0x00AAFF);
         interaction.editReply({embeds:[embed]});
     }
-    else if (commandName === 'avatar') {
-        const user = options.getUser('user') || interaction.user;
-        const embed = new EmbedBuilder().setImage(user.displayAvatarURL({dynamic:true, size:1024})).setColor(0x00AAFF);
-        interaction.editReply({embeds:[embed]});
-    }
-    else if (commandName === 'help') {
-        const embed = new EmbedBuilder().setTitle('Help').setDescription('Commands active.').setColor(0x00AAFF);
-        interaction.editReply({embeds:[embed]});
-    }
-    // ... setups ...
+    // ... (All setup commands handled here)
     else if (commandName === 'ticketsetup') {
-        const ch = options.getChannel('channel');
         const title = options.getString('title') || 'Support';
         const desc = options.getString('description') || 'Open a ticket';
         const cfg = guildSettings.get(interaction.guildId) || {};
@@ -540,7 +383,7 @@ client.on('interactionCreate', async interaction => {
         guildSettings.set(interaction.guildId, cfg);
         const embed = new EmbedBuilder().setTitle(title).setDescription(desc).setColor(0x2F3136);
         const btn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('create_ticket').setLabel('Open Ticket').setStyle(ButtonStyle.Secondary).setEmoji('📩'));
-        await ch.send({embeds:[embed], components:[btn]});
+        await options.getChannel('channel').send({embeds:[embed], components:[btn]});
         interaction.editReply('✅ Setup done.');
     }
     else if (commandName === 'autoreact-setup') {
@@ -603,14 +446,89 @@ client.on('interactionCreate', async interaction => {
         await interaction.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(btn)] });
         interaction.editReply('✅ Reaction role created!');
     }
+    else if (commandName === 'mute') {
+        const user = options.getMember('user');
+        const dStr = options.getString('duration');
+        const role = interaction.guild.roles.cache.find(r=>r.name==='Muted');
+        if(!role) return interaction.editReply('❌ "Muted" role missing.');
+        await user.roles.add(role);
+        interaction.editReply(`🤐 Muted **${user.user.tag}**`);
+        const ms = parseDuration(dStr);
+        if(ms) setTimeout(()=> user.roles.remove(role).catch(()=>{}), ms);
+    }
+    else if (commandName === 'unmute') {
+        const user = options.getMember('user');
+        const role = interaction.guild.roles.cache.find(r=>r.name==='Muted');
+        await user.roles.remove(role);
+        interaction.editReply(`🗣️ Unmuted.`);
+    }
+    else if (commandName === 'lock') {
+        await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: false });
+        interaction.editReply('🔒 Locked.');
+    }
+    else if (commandName === 'unlock') {
+        await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: null });
+        interaction.editReply('🔓 Unlocked.');
+    }
+    else if (commandName === 'deafen') {
+        const user = options.getMember('user');
+        if(!user.voice.channel) return interaction.editReply('❌ User not in voice.');
+        await user.voice.setDeaf(true);
+        interaction.editReply(`🔇 Deafened ${user.user.tag}.`);
+    }
+    else if (commandName === 'undeafen') {
+        const user = options.getMember('user');
+        if(!user.voice.channel) return interaction.editReply('❌ User not in voice.');
+        await user.voice.setDeaf(false);
+        interaction.editReply(`🔊 Undeafened ${user.user.tag}.`);
+    }
+    else if (commandName === 'uwulock') {
+        const target = options.getUser('user');
+        uwuTargets.add(target.id);
+        interaction.editReply(`🌸 **${target.username}** is now UwU locked!`);
+    }
+    else if (commandName === 'uwuunlock') {
+        const target = options.getUser('user');
+        uwuTargets.delete(target.id);
+        interaction.editReply(`🛑 **${target.username}** is free.`);
+    }
+    else if (commandName === 'stick') {
+        const text = options.getString('message');
+        const sent = await interaction.channel.send(`**reminder**\n${text}`);
+        stickyMessages.set(interaction.channelId, { content: text, lastMsgId: sent.id });
+        interaction.editReply({content: '✅ Message stuck!', ephemeral: true});
+    }
+    else if (commandName === 'unstick') {
+        if (stickyMessages.has(interaction.channelId)) {
+            const d = stickyMessages.get(interaction.channelId);
+            interaction.channel.messages.delete(d.lastMsgId).catch(()=>{});
+            stickyMessages.delete(interaction.channelId);
+            interaction.editReply('✅ Reminder removed.');
+        } else {
+            interaction.editReply('❌ No sticky message here.');
+        }
+    }
+    else if (commandName === 'afk') {
+        const reason = options.getString('reason') || 'No reason';
+        afkUsers.set(interaction.user.id, { reason, time: Date.now() });
+        interaction.editReply(`💤 AFK set: ${reason}`);
+    }
+    else if (commandName === 'snipe') {
+        const snipedMsg = snipes.get(interaction.channelId);
+        if (!snipedMsg) return interaction.editReply('❌ Nothing to snipe!');
+        const embed = new EmbedBuilder().setAuthor({ name: snipedMsg.author.tag, iconURL: snipedMsg.author.displayAvatarURL() }).setDescription(snipedMsg.content || '*(Image)*').setColor(0xFF0000).setFooter({text:'Deleted recently'});
+        if(snipedMsg.image) embed.setImage(snipedMsg.image);
+        interaction.editReply({ embeds: [embed] });
+    }
+    else if (commandName === 'help') {
+        const embed = new EmbedBuilder().setTitle('Help').setDescription('Commands active.').setColor(0x00AAFF);
+        interaction.editReply({embeds:[embed]});
+    }
     else {
         interaction.editReply('⚠️ Command not fully implemented yet.');
     }
 
-  } catch (err) { 
-      console.error(err); 
-      interaction.editReply('❌ An error occurred: ' + err.message).catch(()=>{});
-  }
+  } catch (err) { interaction.editReply('❌ Error: ' + err.message).catch(()=>{}); }
 });
 
 // --- MEMBER EVENTS ---
@@ -642,28 +560,10 @@ client.on('guildMemberRemove', async member => {
   }
 });
 
-client.on('guildMemberUpdate', (oldMember, newMember) => {
-    const config = guildSettings.get(newMember.guild.id);
-    if (!config || !config.boostChannelId) return;
-    if (!oldMember.premiumSince && newMember.premiumSince) {
-        const ch = newMember.guild.channels.cache.get(config.boostChannelId);
-        if (ch) ch.send((config.boostMessage || "{user} boosted!").replace(/{user}/g, newMember.toString()));
-    }
-});
+// --- CRASH PREVENTION ---
+process.on('unhandledRejection', (reason, p) => console.log('Anti-Crash: ', reason));
+process.on('uncaughtException', (err, origin) => console.log('Anti-Crash: ', err));
 
-// --- ANTI-CRASH SYSTEM (KEEPS BOT ALIVE) ---
-process.on('unhandledRejection', (reason, p) => {
-    console.log(' [Anti-Crash] :: Unhandled Rejection/Catch');
-    console.log(reason, p);
-});
-process.on('uncaughtException', (err, origin) => {
-    console.log(' [Anti-Crash] :: Uncaught Exception/Catch');
-    console.log(err, origin);
-});
-process.on('uncaughtExceptionMonitor', (err, origin) => {
-    console.log(' [Anti-Crash] :: Uncaught Exception/Catch (MONITOR)');
-    console.log(err, origin);
-});
-
+// PASTE TOKEN HERE
 console.log('Starting bot, trying to login...');
 client.login(process.env.TOKEN);
