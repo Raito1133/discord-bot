@@ -29,7 +29,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.MessageContent, // CRITICAL FOR ! COMMANDS
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessageReactions,
@@ -198,7 +198,7 @@ client.once(Events.ClientReady, async () => {
   } catch (error) { console.error('Slash error:', error); }
 });
 
-// --- MAIN MESSAGE LISTENER ---
+// --- MAIN MESSAGE LISTENER (PREFIX COMMANDS) ---
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
@@ -263,7 +263,131 @@ client.on('messageCreate', async message => {
     if (command === 'ping') {
         message.reply(`🏓 Pong! Latency: ${Math.round(client.ws.ping)}ms`);
     }
-    // ... (Your existing prefix commands here are fine, keeping them for reference) ...
+
+    if (command === 'talk') {
+        const text = args.join(' ');
+        if (!text) return message.reply('What should I say?');
+        await message.delete().catch(()=>{}); 
+        await message.channel.send(text);
+    }
+    
+    if (command === 'autoreact') {
+        const role = message.mentions.roles.first();
+        const emoji = args[1]; 
+        if (!role || !emoji) return message.reply('❌ Usage: `!autoreact @Role <Emoji>`');
+        const cfg = guildSettings.get(message.guild.id) || {};
+        if (!cfg.autoReactRoles) cfg.autoReactRoles = new Map();
+        cfg.autoReactRoles.set(role.id, emoji);
+        guildSettings.set(message.guild.id, cfg);
+        message.reply(`✅ Setup! Users with **${role.name}** will get ${emoji} reactions.`);
+    }
+
+    if (command === 'ban' || command === 'kick') {
+      const target = message.guild.members.cache.get(args[0].replace(/\D/g, ''));
+      if (target) {
+         if(command === 'ban') await target.ban(); else await target.kick();
+         message.reply(`✅ User ${command}ed.`);
+      }
+    }
+    if (command === 'mute') {
+      const target = await message.guild.members.fetch(args[0].replace(/\D/g, '')).catch(()=>null);
+      if(!target) return message.reply('User not found.');
+      const role = message.guild.roles.cache.find(r=>r.name==='Muted');
+      if(!role) return message.reply('Muted role not found.');
+      await target.roles.add(role);
+      const ms = parseDuration(args[1]);
+      message.reply(`🤐 Muted ${target.user.tag} ${ms ? `for ${args[1]}` : 'permanently'}.`);
+      if(ms) setTimeout(async()=>{ if(target.roles.cache.has(role.id)) await target.roles.remove(role); }, ms);
+    }
+    if (command === 'unmute') {
+       const target = await message.guild.members.fetch(args[0].replace(/\D/g, ''));
+       const role = message.guild.roles.cache.find(r => r.name === 'Muted');
+       await target.roles.remove(role);
+       message.reply(`🗣️ Unmuted.`);
+    }
+    if (command === 'lock') {
+        await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
+        message.reply('🔒 Channel Locked!');
+    }
+    if (command === 'unlock') {
+        await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: null });
+        message.reply('🔓 Channel Unlocked!');
+    }
+    if (command === 'purge') {
+        const amount = parseInt(args[0]);
+        if (isNaN(amount)) return message.reply('Enter amount');
+        await message.channel.bulkDelete(amount, true);
+        message.channel.send(`Deleted ${amount}`).then(m => setTimeout(() => m.delete(), 2000));
+    }
+    if (command === 'uwulock') {
+      const target = message.mentions.users.first();
+      if (!target) return message.reply('Mention a user!');
+      uwuTargets.add(target.id);
+      message.channel.send(`🌸 **${target.username}** is now UwU locked!`);
+    }
+    if (command === 'uwuunlock') {
+      const target = message.mentions.users.first();
+      uwuTargets.delete(target.id);
+      message.channel.send(`🛑 **${target.username}** is free.`);
+    }
+    if (command === 'stick') {
+      const text = args.join(' ');
+      const sent = await message.channel.send(`**reminder**\n${text}`);
+      stickyMessages.set(message.channel.id, { content: text, lastMsgId: sent.id });
+      message.delete();
+    }
+    if (command === 'unstick') {
+      if (stickyMessages.has(message.channel.id)) {
+        const d = stickyMessages.get(message.channel.id);
+        message.channel.messages.delete(d.lastMsgId).catch(()=>{});
+        stickyMessages.delete(message.channel.id);
+        message.channel.send('✅ Reminder removed.');
+      }
+    }
+    if (command === 'setprefix') {
+        const newPrefix = args[0];
+        const cfg = guildSettings.get(message.guild.id) || {};
+        cfg.prefix = newPrefix;
+        guildSettings.set(message.guild.id, cfg);
+        message.reply(`Prefix set to ${newPrefix}`);
+    }
+   
+    if (command === 'userinfo') {
+      const member = message.mentions.members.first() || message.member;
+      let roles = member.roles.cache.filter(r => r.name !== '@everyone').map(r => r).join(', ');
+      if (roles.length > 1000) roles = roles.slice(0, 1000) + '...';
+      const embed = new EmbedBuilder().setTitle(`👤 Info: ${member.user.username}`).setThumbnail(member.user.displayAvatarURL()).setColor(0x00AAFF)
+        .addFields({ name: 'ID', value: member.id, inline: true }, { name: 'Joined', value: `<t:${parseInt(member.joinedTimestamp / 1000)}:R>`, inline: true }, { name: 'Roles', value: roles||'None' });
+      message.reply({ embeds: [embed] });
+    }
+    if (command === 'avatar') {
+      const user = message.mentions.users.first() || message.author;
+      const embed = new EmbedBuilder().setTitle(`${user.username}'s Avatar`).setImage(user.displayAvatarURL({dynamic:true, size:1024})).setColor(0x00AAFF);
+      message.reply({ embeds: [embed] });
+    }
+    if (command === 'help') {
+        const embed = new EmbedBuilder().setTitle('📜 Bot Command List').setColor(0x00AAFF).setDescription(`Prefix: **${serverPrefix}**`)
+            .addFields(
+                { name: '🔒 Admin', value: '`ban`, `kick`, `mute`, `unmute`, `lock`, `unlock`, `purge`, `deafen`, `uwulock`, `stick`, `setprefix`, `talk`, `autoreact`' },
+                { name: '🌍 Public', value: '`userinfo`, `avatar`, `snipe`, `afk`, `ping`, `me`' },
+                { name: '⚙️ Setup', value: '`/autorole-setup`, `/welcome-setup`, `/ticketsetup`, `/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
+            );
+        message.reply({ embeds: [embed] });
+    }
+    if (command === 'me') message.reply('This bot made by Enkkd out of boredom and this is a custom bot');
+    if (command === 'afk') {
+      const reason = args.join(' ') || 'No reason';
+      afkUsers.set(message.author.id, { reason, time: Date.now() });
+      message.reply(`💤 AFK set: ${reason}`);
+    }
+    if (command === 'snipe') {
+      const snipedMsg = snipes.get(message.channel.id);
+      if (!snipedMsg) return message.reply('❌ Nothing to snipe!');
+      const embed = new EmbedBuilder().setAuthor({ name: snipedMsg.author.tag, iconURL: snipedMsg.author.displayAvatarURL() }).setDescription(snipedMsg.content || '*(Image)*').setColor(0xFF0000).setFooter({text:'Deleted recently'});
+      if(snipedMsg.image) embed.setImage(snipedMsg.image);
+      message.reply({ embeds: [embed] });
+    }
+
   } catch (e) { console.error(e); }
 });
 
@@ -329,25 +453,22 @@ client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
   // --- COMMAND LOGIC START ---
-  if (interaction.commandName === 'ping') {
-    await interaction.reply(`🏓 Pong! Latency: ${Math.round(client.ws.ping)}ms`);
-    return;
-  }
-
-  if (interaction.commandName === 'talk') {
-    await interaction.deferReply({ ephemeral: true });
-    try {
-        const msg = interaction.options.getString('message');
-        const channel = interaction.options.getChannel('channel') || interaction.channel;
-        await channel.send(msg);
-        interaction.editReply('✅ Message sent!');
-    } catch(err) { interaction.editReply('❌ Error'); }
-    return;
-  }
-
   await interaction.deferReply({ ephemeral: false });
 
   try {
+    if (interaction.commandName === 'ping') {
+      interaction.editReply(`🏓 Pong! Latency: ${Math.round(client.ws.ping)}ms`);
+    }
+
+    if (interaction.commandName === 'talk') {
+        try {
+            const msg = interaction.options.getString('message');
+            const channel = interaction.options.getChannel('channel') || interaction.channel;
+            await channel.send(msg);
+            interaction.editReply('✅ Message sent!');
+        } catch(err) { interaction.editReply('❌ Error'); }
+    }
+
     // === MODERATION LOGIC ===
     if (interaction.commandName === 'ban') {
         const user = interaction.options.getMember('user');
@@ -456,6 +577,31 @@ client.on('interactionCreate', async interaction => {
         if (!snipedMsg) return interaction.editReply('❌ Nothing to snipe!');
         const embed = new EmbedBuilder().setAuthor({ name: snipedMsg.author.tag, iconURL: snipedMsg.author.displayAvatarURL() }).setDescription(snipedMsg.content || '*(Image)*').setColor(0xFF0000).setFooter({text:'Deleted recently'});
         if(snipedMsg.image) embed.setImage(snipedMsg.image);
+        interaction.editReply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'userinfo') {
+      const member = interaction.options.getMember('user') || interaction.member;
+      let roles = member.roles.cache.filter(r => r.name !== '@everyone').map(r => r).join(', ');
+      if (roles.length > 1000) roles = roles.slice(0, 1000) + '...';
+      const embed = new EmbedBuilder().setTitle(`👤 Info: ${member.user.username}`).setThumbnail(member.user.displayAvatarURL()).setColor(0x00AAFF)
+        .addFields({ name: 'ID', value: member.id, inline: true }, { name: 'Joined', value: `<t:${parseInt(member.joinedTimestamp / 1000)}:R>`, inline: true }, { name: 'Roles', value: roles||'None' });
+      interaction.editReply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'avatar') {
+      const user = interaction.options.getUser('user') || interaction.user;
+      const embed = new EmbedBuilder().setTitle(`${user.username}'s Avatar`).setImage(user.displayAvatarURL({dynamic:true, size:1024})).setColor(0x00AAFF);
+      interaction.editReply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'help') {
+        const embed = new EmbedBuilder().setTitle('📜 Bot Command List').setColor(0x00AAFF).setDescription(`Prefix: **${defaultPrefix}**`)
+            .addFields(
+                { name: '🔒 Admin', value: '`ban`, `kick`, `mute`, `unmute`, `lock`, `unlock`, `purge`, `deafen`, `uwulock`, `stick`, `setprefix`, `talk`, `autoreact`' },
+                { name: '🌍 Public', value: '`userinfo`, `avatar`, `snipe`, `afk`, `ping`, `me`' },
+                { name: '⚙️ Setup', value: '`/autorole-setup`, `/welcome-setup`, `/ticketsetup`, `/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
+            );
         interaction.editReply({ embeds: [embed] });
     }
 
