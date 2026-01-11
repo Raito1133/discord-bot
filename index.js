@@ -81,6 +81,21 @@ const commands = [
     ],
     default_member_permissions: '8'
   },
+  // === NEW EMBED COMMAND ===
+  {
+    name: 'embed',
+    description: 'Create a custom embedded message',
+    options: [
+      { name: 'title', description: 'Title of the embed', type: 3, required: false },
+      { name: 'description', description: 'Main text', type: 3, required: false },
+      { name: 'color', description: 'Hex Color (e.g. #FF0000)', type: 3, required: false },
+      { name: 'image', description: 'Image URL', type: 3, required: false },
+      { name: 'thumbnail', description: 'Thumbnail URL', type: 3, required: false },
+      { name: 'footer', description: 'Footer text', type: 3, required: false },
+      { name: 'channel', description: 'Where to send it?', type: 7, required: false }
+    ],
+    default_member_permissions: '8'
+  },
   { name: 'mute', description: 'Mute user', options: [{ name: 'user', description: 'User', type: 6, required: true }, { name: 'duration', description: 'e.g. 10s, 5m', type: 3, required: false }], default_member_permissions: '8' },
   { name: 'unmute', description: 'Unmute user', options: [{ name: 'user', description: 'User', type: 6, required: true }], default_member_permissions: '8' },
   { name: 'ban', description: 'Ban user', options: [{ name: 'user', description: 'User', type: 6, required: true }, { name: 'reason', description: 'Reason', type: 3, required: false }], default_member_permissions: '8' },
@@ -201,11 +216,6 @@ client.once(Events.ClientReady, async () => {
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
-  console.log('Got message:', message.content);
-
-  // DEBUG LOG - IF YOU DON'T SEE THIS IN CONSOLE, YOUR INTENTS ARE OFF
-  console.log(`📩 Message seen from ${message.author.tag}: ${message.content}`);
-
   // 1. UWU LOCK
   if (uwuTargets.has(message.author.id)) {
     try {
@@ -259,11 +269,15 @@ client.on('messageCreate', async message => {
   const command = args.shift().toLowerCase();
 
   try {
+    // PREFIX COMMANDS LOGIC
     if (command === 'ping') return message.reply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
+    
     if (command === 'talk') {
+        if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
         message.delete().catch(()=>{});
         return message.channel.send(args.join(' ') || 'What?');
     }
+    
     if (command === 'autoreact') {
         if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
         const role = message.mentions.roles.first();
@@ -276,20 +290,30 @@ client.on('messageCreate', async message => {
         guildSettings.set(message.guild.id, cfg);
         return message.reply(`✅ Auto-react set! Users with **${role.name}** will get ${emoji} reactions.`);
     }
+    
     if (command === 'ban') {
         if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
         const target = message.mentions.members.first();
-        if(target) { await target.ban(); message.reply('Banned.'); }
+        if(!target) return message.reply('Mention someone to ban.');
+        if(!target.bannable) return message.reply('❌ Cannot ban (Hierarchy error).');
+        await target.ban(); 
+        message.reply(`🔨 Banned **${target.user.tag}**`);
     }
+    
     if (command === 'kick') {
         if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
         const target = message.mentions.members.first();
-        if(target) { await target.kick(); message.reply('Kicked.'); }
+        if(!target) return message.reply('Mention someone to kick.');
+        if(!target.kickable) return message.reply('❌ Cannot kick (Hierarchy error).');
+        await target.kick(); 
+        message.reply(`🦵 Kicked **${target.user.tag}**`);
     }
+    
     if (command === 'help') {
-        const embed = new EmbedBuilder().setTitle('Help').setDescription('Use `/` commands for full list.').setColor(0x00AAFF);
+        const embed = new EmbedBuilder().setTitle('Help').setDescription('Commands active.\nUse `/` for slash commands or `!` for prefix.').setColor(0x00AAFF);
         message.reply({embeds:[embed]});
     }
+    
     if (command === 'userinfo') {
         const member = message.mentions.members.first() || message.member;
         const embed = new EmbedBuilder().setTitle(`User: ${member.user.tag}`).addFields({name:'Joined', value: `<t:${Math.floor(member.joinedTimestamp/1000)}:R>`}).setColor(0x00AAFF);
@@ -298,13 +322,8 @@ client.on('messageCreate', async message => {
   } catch (e) { console.error('Prefix Error:', e); }
 });
 
-// --- SLASH COMMAND HANDLER ---
-lient.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  console.log('Slash used:', interaction.commandName); // add this line
-
-  await interaction.deferReply({ ephemeral: false });
+// --- SLASH COMMAND HANDLER (FIXED) ---
+client.on('interactionCreate', async interaction => {
   // BUTTONS & MODALS FIRST
   if (interaction.isButton()) {
     if (interaction.customId.startsWith('rr_')) {
@@ -363,28 +382,44 @@ lient.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
   // --- SLASH COMMAND LOGIC START ---
-  
   try {
     const { commandName, options } = interaction;
 
-    // === CRITICAL FIX: PURGE MUST BE EPHEMERAL TO PREVENT CRASH ===
+    // === CRITICAL FIX: PURGE MUST BE EPHEMERAL ===
     if (commandName === 'purge') {
         await interaction.deferReply({ ephemeral: true }); 
         const amt = options.getInteger('amount');
         if (amt > 100) return interaction.editReply('❌ Max 100 messages.');
-        
         await interaction.channel.bulkDelete(amt, true).catch(err => {
-             console.error("Purge error", err);
              return interaction.editReply("❌ Could not delete messages (too old?).");
         });
-        
         return interaction.editReply(`🗑️ Deleted ${amt} messages.`);
     }
 
-    // --- FOR ALL OTHER COMMANDS, STANDARD DEFER ---
+    // --- STANDARD DEFER ---
     await interaction.deferReply({ ephemeral: false });
 
-    if (commandName === 'ping') {
+    // === NEW EMBED COMMAND LOGIC ===
+    if (commandName === 'embed') {
+        const title = options.getString('title');
+        const description = options.getString('description');
+        const color = options.getString('color') || '#0099FF';
+        const image = options.getString('image');
+        const thumbnail = options.getString('thumbnail');
+        const footer = options.getString('footer');
+        const targetChannel = options.getChannel('channel') || interaction.channel;
+
+        const embed = new EmbedBuilder().setColor(color);
+        if (title) embed.setTitle(title);
+        if (description) embed.setDescription(description);
+        if (image) embed.setImage(image);
+        if (thumbnail) embed.setThumbnail(thumbnail);
+        if (footer) embed.setFooter({ text: footer });
+
+        await targetChannel.send({ embeds: [embed] });
+        interaction.editReply({ content: '✅ Embed sent!', ephemeral: true });
+    }
+    else if (commandName === 'ping') {
         interaction.editReply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
     }
     else if (commandName === 'talk') {
@@ -632,4 +667,3 @@ process.on('uncaughtExceptionMonitor', (err, origin) => {
 
 console.log('Starting bot, trying to login...');
 client.login(process.env.TOKEN);
-
