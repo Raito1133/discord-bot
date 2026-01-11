@@ -18,7 +18,7 @@ const {
 } = require('discord.js');
 
 // --- ⚠️ CONFIGURATION ⚠️ ---
-const GUILD_ID = '1243470533316579361'; 
+const GUILD_ID = '1243470533316579361'; // Your Server ID
 
 // PASTE THE ROLE ID OF THE ADMINS/MODS YOU WANT PINGED IN TICKETS:
 const TICKET_SUPPORT_ROLE = '1249714120853553172'; 
@@ -82,7 +82,6 @@ const commands = [
     default_member_permissions: '8'
   },
   { name: 'me', description: 'Credits' },
-  // === CUSTOM EMBED COMMAND ===
   {
     name: 'embed',
     description: 'Create a custom embedded message',
@@ -146,7 +145,7 @@ client.once(Events.ClientReady, async () => {
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
-  // DEBUGGING: If you don't see this log, your INTENTS are OFF in Dev Portal
+  // DEBUGGING
   console.log(`[DEBUG] Message received: ${message.content}`);
 
   // 1. UWU LOCK
@@ -240,7 +239,12 @@ client.on('messageCreate', async message => {
     }
     
     if (command === 'help') {
-        const embed = new EmbedBuilder().setTitle('Help').setDescription('Commands active.\nUse `/` or `!` commands.').setColor(0x00AAFF);
+        const embed = new EmbedBuilder().setTitle('📜 Bot Command Manual').setColor(0x00AAFF).setDescription(`**Prefix:** \`${serverPrefix}\`\nUse \`/\` for Slash Commands or \`${serverPrefix}\` for text commands.`)
+            .addFields(
+                { name: '🛡️ Admin / Mod', value: '`ban`, `kick`, `mute`, `unmute`, `lock`, `unlock`, `purge`\n`deafen`, `undeafen`, `stick`, `unstick`\n`setprefix`, `talk`, `embed`, `uwulock`' },
+                { name: '🌍 Public / Fun', value: '`ping`, `afk`, `snipe`, `userinfo`, `avatar`, `me`, `help`' },
+                { name: '⚙️ Setup (Slash Only)', value: '`/ticketsetup`, `/welcome-setup`, `/leave-setup`\n`/autorole-setup`, `/autoreact-setup`\n`/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
+            );
         message.reply({embeds:[embed]});
     }
     
@@ -252,7 +256,7 @@ client.on('messageCreate', async message => {
   } catch (e) { console.error('Prefix Error:', e); }
 });
 
-// --- SLASH COMMAND HANDLER (/) ---
+// --- SLASH COMMAND HANDLER ---
 client.on('interactionCreate', async interaction => {
   // BUTTONS
   if (interaction.isButton()) {
@@ -315,7 +319,6 @@ client.on('interactionCreate', async interaction => {
   try {
     const { commandName, options } = interaction;
 
-    // === CRITICAL FIX: PURGE MUST BE EPHEMERAL ===
     if (commandName === 'purge') {
         await interaction.deferReply({ ephemeral: true }); 
         const amt = options.getInteger('amount');
@@ -324,7 +327,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply(`🗑️ Deleted ${amt}.`);
     }
 
-    // --- STANDARD DEFER ---
     await interaction.deferReply({ ephemeral: false });
 
     if (commandName === 'ping') interaction.editReply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
@@ -332,11 +334,17 @@ client.on('interactionCreate', async interaction => {
         await (options.getChannel('channel')||interaction.channel).send(options.getString('message'));
         interaction.editReply('✅ Sent.');
     }
-    // === RESTORED /me COMMAND ===
     else if (commandName === 'me') {
         interaction.editReply('This bot was made out of boredom by Enkkd.');
     }
-    // === NEW EMBED COMMAND ===
+    // === SETPREFIX LOGIC FIXED HERE ===
+    else if (commandName === 'setprefix') {
+        const newPrefix = options.getString('new_prefix');
+        const cfg = guildSettings.get(interaction.guildId) || {};
+        cfg.prefix = newPrefix;
+        guildSettings.set(interaction.guildId, cfg);
+        interaction.editReply(`✅ Prefix changed to: \`${newPrefix}\``);
+    }
     else if (commandName === 'embed') {
         const title = options.getString('title');
         const description = options.getString('description');
@@ -348,7 +356,6 @@ client.on('interactionCreate', async interaction => {
 
         const embed = new EmbedBuilder().setColor(color);
         if (title) embed.setTitle(title);
-        // Replace literal \n with actual newlines
         if (description) embed.setDescription(description.replace(/\\n/g, '\n'));
         if (image) embed.setImage(image);
         if (thumbnail) embed.setThumbnail(thumbnail);
@@ -374,7 +381,16 @@ client.on('interactionCreate', async interaction => {
         const embed = new EmbedBuilder().setTitle(`User: ${user.user.tag}`).addFields({name:'Joined', value:`<t:${Math.floor(user.joinedTimestamp/1000)}:R>`}).setColor(0x00AAFF);
         interaction.editReply({embeds:[embed]});
     }
-    // ... (All setup commands handled here)
+    else if (commandName === 'help') {
+        const embed = new EmbedBuilder().setTitle('📜 Bot Command Manual').setColor(0x00AAFF).setDescription(`**Prefix:** \`${defaultPrefix}\`\nUse \`/\` for Slash Commands or \`${defaultPrefix}\` for text commands.`)
+            .addFields(
+                { name: '🛡️ Admin / Mod', value: '`ban`, `kick`, `mute`, `unmute`, `lock`, `unlock`, `purge`\n`deafen`, `undeafen`, `stick`, `unstick`\n`setprefix`, `talk`, `embed`, `uwulock`' },
+                { name: '🌍 Public / Fun', value: '`ping`, `afk`, `snipe`, `userinfo`, `avatar`, `me`, `help`' },
+                { name: '⚙️ Setup (Slash Only)', value: '`/ticketsetup`, `/welcome-setup`, `/leave-setup`\n`/autorole-setup`, `/autoreact-setup`\n`/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
+            );
+        interaction.editReply({embeds:[embed]});
+    }
+    // ... (Other Setups)
     else if (commandName === 'ticketsetup') {
         const title = options.getString('title') || 'Support';
         const desc = options.getString('description') || 'Open a ticket';
@@ -519,10 +535,6 @@ client.on('interactionCreate', async interaction => {
         const embed = new EmbedBuilder().setAuthor({ name: snipedMsg.author.tag, iconURL: snipedMsg.author.displayAvatarURL() }).setDescription(snipedMsg.content || '*(Image)*').setColor(0xFF0000).setFooter({text:'Deleted recently'});
         if(snipedMsg.image) embed.setImage(snipedMsg.image);
         interaction.editReply({ embeds: [embed] });
-    }
-    else if (commandName === 'help') {
-        const embed = new EmbedBuilder().setTitle('Help').setDescription('Commands active.').setColor(0x00AAFF);
-        interaction.editReply({embeds:[embed]});
     }
     else {
         interaction.editReply('⚠️ Command not fully implemented yet.');
