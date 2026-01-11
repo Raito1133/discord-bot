@@ -201,6 +201,9 @@ client.once(Events.ClientReady, async () => {
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
+  // DEBUG LOG - IF YOU DON'T SEE THIS IN CONSOLE, YOUR INTENTS ARE OFF
+  console.log(`📩 Message seen from ${message.author.tag}: ${message.content}`);
+
   // 1. UWU LOCK
   if (uwuTargets.has(message.author.id)) {
     try {
@@ -293,7 +296,7 @@ client.on('messageCreate', async message => {
   } catch (e) { console.error('Prefix Error:', e); }
 });
 
-// --- SLASH COMMAND HANDLER (FIXED) ---
+// --- SLASH COMMAND HANDLER ---
 client.on('interactionCreate', async interaction => {
   // BUTTONS & MODALS FIRST
   if (interaction.isButton()) {
@@ -353,13 +356,13 @@ client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
   // --- SLASH COMMAND LOGIC START ---
-  // We defer mostly as NOT ephemeral, but let specific commands change logic
+  
   try {
     const { commandName, options } = interaction;
 
-    // --- PURGE FIX: use ephemeral so bot message doesn't get deleted ---
+    // === CRITICAL FIX: PURGE MUST BE EPHEMERAL TO PREVENT CRASH ===
     if (commandName === 'purge') {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ ephemeral: true }); 
         const amt = options.getInteger('amount');
         if (amt > 100) return interaction.editReply('❌ Max 100 messages.');
         
@@ -606,6 +609,19 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
     }
 });
 
-// PASTE TOKEN HERE
+// --- ANTI-CRASH SYSTEM (KEEPS BOT ALIVE) ---
+process.on('unhandledRejection', (reason, p) => {
+    console.log(' [Anti-Crash] :: Unhandled Rejection/Catch');
+    console.log(reason, p);
+});
+process.on('uncaughtException', (err, origin) => {
+    console.log(' [Anti-Crash] :: Uncaught Exception/Catch');
+    console.log(err, origin);
+});
+process.on('uncaughtExceptionMonitor', (err, origin) => {
+    console.log(' [Anti-Crash] :: Uncaught Exception/Catch (MONITOR)');
+    console.log(err, origin);
+});
+
 console.log('Starting bot, trying to login...');
 client.login(process.env.TOKEN);
