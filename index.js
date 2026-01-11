@@ -201,6 +201,8 @@ client.once(Events.ClientReady, async () => {
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
+  console.log('Got message:', message.content);
+
   // DEBUG LOG - IF YOU DON'T SEE THIS IN CONSOLE, YOUR INTENTS ARE OFF
   console.log(`📩 Message seen from ${message.author.tag}: ${message.content}`);
 
@@ -297,7 +299,12 @@ client.on('messageCreate', async message => {
 });
 
 // --- SLASH COMMAND HANDLER ---
-client.on('interactionCreate', async interaction => {
+lient.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  console.log('Slash used:', interaction.commandName); // add this line
+
+  await interaction.deferReply({ ephemeral: false });
   // BUTTONS & MODALS FIRST
   if (interaction.isButton()) {
     if (interaction.customId.startsWith('rr_')) {
@@ -625,3 +632,4 @@ process.on('uncaughtExceptionMonitor', (err, origin) => {
 
 console.log('Starting bot, trying to login...');
 client.login(process.env.TOKEN);
+
