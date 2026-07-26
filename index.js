@@ -18,9 +18,9 @@ const {
 } = require('discord.js');
 
 // --- ⚠️ CONFIGURATION ⚠️ ---
-const GUILD_ID = '1371775026264670228'; // Your Single Server ID Only
+const GUILD_ID = '1371775026264670228'; // Your Single Server ID
 
-// --- MULTIPLE SUPPORT ROLES FOR 3 PANELS ---
+// --- SUPPORT ROLES FOR EACH TICKET TYPE ---
 const ULTRA_SUPPORT_ROLE = '1529499021884919858';
 const FARM_SUPPORT_ROLE = '1529499059596038285';
 const CONCERN_SUPPORT_ROLE = '1529498802149392614';
@@ -44,7 +44,6 @@ const defaultPrefix = '!';
 // --- DATA STORAGE ---
 const guildSettings = new Map();
 const snipes = new Map();
-const skullboardCache = new Set();
 const afkUsers = new Map();
 const uwuTargets = new Set();
 const stickyMessages = new Map();
@@ -67,8 +66,7 @@ function parseDuration(str) {
 // --- HELPER: UWU TRANSLATOR ---
 function uwuify(text) {
   const faces = ['(・`ω´・)', ';;w;;', 'owo', 'UwU', '>w<', '^w^'];
-  text = text.replace(/(?:r|l)/g, 'w').replace(/(?:R|L)/g, 'W').replace(/n([aeiou])/g, 'ny$1').replace(/N([aeiou])/g, 'Ny$1').replace(/N([AEIOU])/g, 'Ny$1').replace(/ove/g, 'uv').replace(/!+/g, ' ' + faces[Math.floor(Math.random() * faces.length)] + ' ');
-  return text;
+  return text.replace(/(?:r|l)/g, 'w').replace(/(?:R|L)/g, 'W').replace(/n([aeiou])/g, 'ny$1').replace(/N([aeiou])/g, 'Ny$1').replace(/N([AEIOU])/g, 'Ny$1').replace(/ove/g, 'uv').replace(/!+/g, ' ' + faces[Math.floor(Math.random() * faces.length)] + ' ');
 }
 
 // --- SLASH COMMAND DEFINITIONS ---
@@ -121,15 +119,10 @@ const commands = [
   { name: 'leave-setup', description: 'Setup leave message', options: [{ name: 'channel', description: 'Channel', type: 7, required: true }, { name: 'message', description: 'Message', type: 3, required: false }], default_member_permissions: '8' },
   { 
     name: 'ticketsetup', 
-    description: 'Create a specific ticket panel', 
+    description: 'Create the multi-button ticket panel', 
     options: [
-      { name: 'type', description: 'Which ticket panel?', type: 3, required: true, choices: [
-        { name: 'Ultra Help', value: 'ultra' },
-        { name: 'Farm Help', value: 'farm' },
-        { name: 'Concern', value: 'concern' }
-      ]},
       { name: 'channel', description: 'Where to post the panel', type: 7, required: true }, 
-      { name: 'category', description: 'Where to open tickets', type: 7, channel_types: [4], required: false }, 
+      { name: 'category', description: 'Where to open ticket channels', type: 7, channel_types: [4], required: false }, 
       { name: 'title', description: 'Panel Title', type: 3, required: false }, 
       { name: 'description', description: 'Panel Description', type: 3, required: false }
     ], 
@@ -142,7 +135,7 @@ const commands = [
   { name: 'reactionrole', description: 'Reaction Role', options: [{ name: 'role', description: 'Role to give', type: 8, required: true }, { name: 'description', description: 'Message text', type: 3, required: true }, { name: 'emoji', description: 'Emoji to click', type: 3, required: false }], default_member_permissions: '8' }
 ];
 
-// --- STARTUP (SINGLE SERVER RESTRICTED) ---
+// --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
   client.user.setActivity('Watching Nocte Server', { type: ActivityType.Listening });
@@ -152,20 +145,19 @@ client.once(Events.ClientReady, async () => {
     if (GUILD_ID === 'PASTE_YOUR_SERVER_ID_HERE') {
       console.log('⚠️ ERROR: YOU FORGOT TO PASTE YOUR SERVER ID AT THE TOP!');
     } else {
-      console.log('Clearing global commands to prevent duplication...');
+      console.log('Clearing global commands...');
       await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
 
-      console.log('Registering commands exclusively to your target server...');
+      console.log('Registering commands to your server...');
       await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-      console.log('✅ Commands successfully locked to your single server!');
+      console.log('✅ Commands Ready!');
     }
   } catch (error) { console.error('Slash error:', error); }
 });
 
 // --- PREFIX HANDLER (!) ---
 client.on('messageCreate', async message => {
-  if (message.author.bot || !message.guild) return;
-  if (message.guild.id !== GUILD_ID) return; // Strict single server safety lock
+  if (message.author.bot || !message.guild || message.guild.id !== GUILD_ID) return;
 
   if (uwuTargets.has(message.author.id)) {
     try {
@@ -214,9 +206,9 @@ client.on('messageCreate', async message => {
 
 // --- INTERACTION HANDLER ---
 client.on('interactionCreate', async interaction => {
-  if (!interaction.guild || interaction.guild.id !== GUILD_ID) return; // Strict single server lock
+  if (!interaction.guild || interaction.guild.id !== GUILD_ID) return;
 
-  // BUTTONS
+  // BUTTON CLICK HANDLER
   if (interaction.isButton()) {
     if (interaction.customId.startsWith('rr_')) {
         const roleId = interaction.customId.split('_')[1];
@@ -235,9 +227,11 @@ client.on('interactionCreate', async interaction => {
     if (['ticket_ultra', 'ticket_farm', 'ticket_concern'].includes(interaction.customId)) {
         const type = interaction.customId.replace('ticket_', '');
         const chName = `${type}-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+        
         if (interaction.guild.channels.cache.find(c => c.name === chName)) {
-            return interaction.reply({ content: `❌ You already have an active ${type} ticket!`, ephemeral: true });
+            return interaction.reply({ content: `❌ You already have an open ${type} ticket!`, ephemeral: true });
         }
+
         const modal = new ModalBuilder().setCustomId(`modal_${type}`).setTitle(`Open ${type.toUpperCase()} Ticket`);
         modal.addComponents(
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_subject').setLabel('Subject').setStyle(TextInputStyle.Short).setRequired(true)),
@@ -253,7 +247,7 @@ client.on('interactionCreate', async interaction => {
     return;
   }
 
-  // MODAL SUBMISSIONS FOR THE 3 PANELS
+  // MODAL SUBMISSIONS
   if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_')) {
     await interaction.deferReply({ ephemeral: true });
     const type = interaction.customId.replace('modal_', '');
@@ -266,7 +260,7 @@ client.on('interactionCreate', async interaction => {
         const ch = await interaction.guild.channels.create({
             name: chName, 
             type: ChannelType.GuildText, 
-            parent: config[`${type}Category`] || config.ticketCategory,
+            parent: config.ticketCategory,
             permissionOverwrites: [
               { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, 
               { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel] }
@@ -276,6 +270,7 @@ client.on('interactionCreate', async interaction => {
         const embed = new EmbedBuilder().setTitle(`Ticket (${type.toUpperCase()}): ${subject}`).setDescription(`**User:** ${interaction.user}\n**Desc:** ${desc}`).setColor(0x0099FF);
         const btn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒'));
         
+        // Ping only the specific support role for this ticket type
         let mentions = `${interaction.user}`;
         if (type === 'ultra' && ULTRA_SUPPORT_ROLE) mentions += ` <@&${ULTRA_SUPPORT_ROLE}>`;
         if (type === 'farm' && FARM_SUPPORT_ROLE) mentions += ` <@&${FARM_SUPPORT_ROLE}>`;
@@ -297,30 +292,45 @@ client.on('interactionCreate', async interaction => {
 
     if (commandName === 'ping') interaction.editReply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
     
-    // --- TICKET SETUP FOR 3 INDEPENDENT PANELS ---
+    // --- SINGLE PANEL TICKET SETUP WITH 3 CUSTOM BUTTONS ---
     else if (commandName === 'ticketsetup') {
-        const panelType = options.getString('type'); // ultra, farm, concern
-        const title = options.getString('title') || `${panelType.toUpperCase()} Support`;
-        const desc = options.getString('description') || `Click below to open a ${panelType} ticket.`;
+        const title = options.getString('title') || 'Support & Assistance Panel';
+        const desc = options.getString('description') || 'Select a category below to open a ticket with support:';
         const channel = options.getChannel('channel');
         const category = options.getChannel('category');
 
         const cfg = guildSettings.get(interaction.guildId) || {};
-        if (category) cfg[`${panelType}Category`] = category.id;
+        if (category) cfg.ticketCategory = category.id;
         guildSettings.set(interaction.guildId, cfg);
 
         const embed = new EmbedBuilder().setTitle(title).setDescription(desc).setColor(0x2F3136);
-        const btn = new ButtonBuilder()
-          .setCustomId(`ticket_${panelType}`)
-          .setLabel(`Open ${panelType.charAt(0).toUpperCase() + panelType.slice(1)} Ticket`)
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji('📩');
 
-        await channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(btn)] });
-        interaction.editReply(`✅ Successfully created the **${panelType}** ticket panel in ${channel}!`);
+        // 3 Distinct Buttons with specific colors and emojis
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('ticket_ultra')
+            .setLabel('Ultra Help')
+            .setStyle(ButtonStyle.Danger) // Red
+            .setEmoji('⚔️'),
+            
+          new ButtonBuilder()
+            .setCustomId('ticket_farm')
+            .setLabel('Farm Help')
+            .setStyle(ButtonStyle.Success) // Green
+            .setEmoji('🗡️'),
+
+          new ButtonBuilder()
+            .setCustomId('ticket_concern')
+            .setLabel('Concern')
+            .setStyle(ButtonStyle.Primary) // Blue
+            .setEmoji('🎟️')
+        );
+
+        await channel.send({ embeds: [embed], components: [row] });
+        interaction.editReply(`✅ Single panel with 3 buttons sent to ${channel}!`);
     }
     else {
-        interaction.editReply('⚠️ Command not fully matched.');
+        interaction.editReply('⚠️ Command not recognized.');
     }
   } catch (err) { interaction.editReply('❌ Error: ' + err.message).catch(()=>{}); }
 });
