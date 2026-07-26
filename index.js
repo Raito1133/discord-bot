@@ -132,13 +132,31 @@ const commands = [
   { name: 'autorole-setup', description: 'Set auto role', options: [{ name: 'role', description: 'Role to give new members', type: 8, required: true }], default_member_permissions: '8' },
   { name: 'skullboard-setup', description: 'Skullboard setup', options: [{ name: 'channel', description: 'Where to log skulls', type: 7, required: true }], default_member_permissions: '8' },
   { name: 'boost-setup', description: 'Set boost announcement', options: [{ name: 'channel', description: 'Where to announce boosts', type: 7, required: true }, { name: 'message', description: 'Custom msg (Use {user})', type: 3, required: false }], default_member_permissions: '8' },
-  { name: 'reactionrole', description: 'Reaction Role Button', options: [{ name: 'role', description: 'Role to give', type: 8, required: true }, { name: 'description', description: 'Message text', type: 3, required: true }, { name: 'emoji', description: 'Emoji on button', type: 3, required: false }], default_member_permissions: '8' }
+  { 
+    name: 'reactionrole', 
+    description: 'Create a panel with up to 5 role buttons', 
+    options: [
+      { name: 'title', description: 'Embed title', type: 3, required: true },
+      { name: 'description', description: 'Embed main text', type: 3, required: true },
+      { name: 'role1', description: 'First role', type: 8, required: true },
+      { name: 'emoji1', description: 'Emoji for button 1', type: 3, required: false },
+      { name: 'role2', description: 'Second role', type: 8, required: false },
+      { name: 'emoji2', description: 'Emoji for button 2', type: 3, required: false },
+      { name: 'role3', description: 'Third role', type: 8, required: false },
+      { name: 'emoji3', description: 'Emoji for button 3', type: 3, required: false },
+      { name: 'role4', description: 'Fourth role', type: 8, required: false },
+      { name: 'emoji4', description: 'Emoji for button 4', type: 3, required: false },
+      { name: 'role5', description: 'Fifth role', type: 8, required: false },
+      { name: 'emoji5', description: 'Emoji for button 5', type: 3, required: false }
+    ], 
+    default_member_permissions: '8' 
+  }
 ];
 
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('just kill me', { type: ActivityType.Listening });
+  client.user.setActivity('hey you', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -524,38 +542,48 @@ client.on('interactionCreate', async interaction => {
         guildSettings.set(interaction.guildId, cfg);
         interaction.editReply('Skullboard channel configured.');
     }
-    // --- REACTION ROLE CREATION COMMAND HANDLER ---
+    // --- MULTI-BUTTON REACTION ROLE CREATION COMMAND HANDLER ---
     else if (commandName === 'reactionrole') {
-        const role = options.getRole('role');
+        const title = options.getString('title');
         const desc = options.getString('description');
-        const rawEmoji = options.getString('emoji');
 
         const embed = new EmbedBuilder()
-            .setTitle(role.name)
+            .setTitle(title)
             .setDescription(desc)
-            .setColor(role.color || 0x0099FF);
+            .setColor(0x0099FF);
 
-        const btn = new ButtonBuilder()
-            .setCustomId(`rr_${role.id}`)
-            .setLabel(`Get ${role.name}`)
-            .setStyle(ButtonStyle.Primary);
+        const row = new ActionRowBuilder();
 
-        if (rawEmoji) {
-            try {
-                // Parse standard or custom Discord emojis safely
-                const match = rawEmoji.match(/<a?:.+?:(\d+)>/);
-                if (match) {
-                    btn.setEmoji(match[1]);
-                } else {
-                    btn.setEmoji(rawEmoji.trim());
+        // Loop through all 5 potential role slots
+        for (let i = 1; i <= 5; i++) {
+            const role = options.getRole(`role${i}`);
+            const rawEmoji = options.getString(`emoji${i}`);
+
+            if (role) {
+                const btn = new ButtonBuilder()
+                    .setCustomId(`rr_${role.id}`)
+                    .setLabel(role.name)
+                    .setStyle(ButtonStyle.Primary);
+
+                if (rawEmoji) {
+                    try {
+                        const match = rawEmoji.match(/<a?:.+?:(\d+)>/);
+                        if (match) {
+                            btn.setEmoji(match[1]);
+                        } else {
+                            btn.setEmoji(rawEmoji.trim());
+                        }
+                    } catch (e) {
+                        console.log(`Emoji issue on button ${i}, continuing without it.`);
+                    }
                 }
-            } catch (e) {
-                console.log('Emoji parsing issue on reaction role button, proceeding without emoji.');
+
+                row.addComponents(btn);
             }
         }
 
-        await interaction.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(btn)] });
-        interaction.editReply({ content: 'Reaction role button posted!', ephemeral: true });
+        await interaction.channel.send({ embeds: [embed], components: [row] });
+        interaction.editReply({ content: 'Reaction role panel posted!', ephemeral: true });
     }
     else if (commandName === 'mute') {
         const user = options.getMember('user');
