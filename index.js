@@ -578,4 +578,4 @@ process.on('uncaughtException', (err, origin) => console.log('Anti-Crash: ', err
 
 // PASTE TOKEN HERE
 console.log('Starting bot, trying to login...');
-client.login(MTQ2MDYxNzg4MzA4NzU0MDI3NQ.G67nEU.25GbBVoMmOWO3QcEKL_2ffftM8mG7W1qScf51s);
+client.login(process.env.DISCORD_TOKEN);
