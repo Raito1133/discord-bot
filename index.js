@@ -236,7 +236,7 @@ client.on('messageCreate', async message => {
         if(!target) return message.reply('Mention someone to ban.');
         if(!target.bannable) return message.reply('❌ Cannot ban target.');
         await target.ban(); 
-        message.reply(`🔨 Banned **${target.user.tag}**`);
+        message.reply(` Banned **${target.user.tag}**`);
     }
     
     if (command === 'kick') {
@@ -245,7 +245,7 @@ client.on('messageCreate', async message => {
         if(!target) return message.reply('Mention someone to kick.');
         if(!target.kickable) return message.reply('❌ Cannot kick target.');
         await target.kick(); 
-        message.reply(`🦵 Kicked **${target.user.tag}**`);
+        message.reply(` Kicked **${target.user.tag}**`);
     }
 
     if (command === 'help') {
@@ -345,7 +345,7 @@ client.on('interactionCreate', async interaction => {
         if (type === 'farm' && FARM_SUPPORT_ROLE) mentions += ` <@&${FARM_SUPPORT_ROLE}>`;
         if (type === 'concern' && CONCERN_SUPPORT_ROLE) mentions += ` <@&${CONCERN_SUPPORT_ROLE}>`;
 
-        await ch.send({content: `🔔 ${mentions}`, embeds:[embed], components:[btn]});
+        await ch.send({content: ` ${mentions}`, embeds:[embed], components:[btn]});
         interaction.editReply(`✅ Created your ticket: ${ch}`);
     } catch(e) { 
         interaction.editReply('❌ Error creating ticket channel.'); 
@@ -377,7 +377,7 @@ client.on('interactionCreate', async interaction => {
         interaction.editReply('✅ Sent.');
     }
     else if (commandName === 'me') {
-        interaction.editReply('This bot was made out of boredom by **Enkkd**.');
+        interaction.editReply('This bot was made out of boredom by **Adlaw**.');
     }
     else if (commandName === 'setprefix') {
         const newPrefix = options.getString('new_prefix');
@@ -456,9 +456,9 @@ client.on('interactionCreate', async interaction => {
         const embed = new EmbedBuilder().setTitle(title).setDescription(desc).setColor(0x2F3136);
 
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('ticket_ultra').setLabel('Ultra Help').setStyle(ButtonStyle.Danger).setEmoji('⚡'),
-          new ButtonBuilder().setCustomId('ticket_farm').setLabel('Farm Help').setStyle(ButtonStyle.Success).setEmoji('🌾'),
-          new ButtonBuilder().setCustomId('ticket_concern').setLabel('Concern').setStyle(ButtonStyle.Primary).setEmoji('❓')
+          new ButtonBuilder().setCustomId('ticket_ultra').setLabel('Ultra Help').setStyle(ButtonStyle.Danger).setEmoji('⚔️'),
+          new ButtonBuilder().setCustomId('ticket_farm').setLabel('Farm Help').setStyle(ButtonStyle.Success).setEmoji('👾'),
+          new ButtonBuilder().setCustomId('ticket_concern').setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('🎟️')
         );
 
         await channel.send({ embeds: [embed], components: [row] });
@@ -530,7 +530,7 @@ client.on('interactionCreate', async interaction => {
         const role = interaction.guild.roles.cache.find(r=>r.name==='Muted');
         if(!role) return interaction.editReply('❌ "Muted" role missing.');
         await user.roles.add(role);
-        interaction.editReply(`🤐 Muted **${user.user.tag}**`);
+        interaction.editReply(` Muted **${user.user.tag}**`);
         const ms = parseDuration(dStr);
         if(ms) setTimeout(()=> user.roles.remove(role).catch(()=>{}), ms);
     }
@@ -538,27 +538,27 @@ client.on('interactionCreate', async interaction => {
         const user = options.getMember('user');
         const role = interaction.guild.roles.cache.find(r=>r.name==='Muted');
         await user.roles.remove(role);
-        interaction.editReply(`🗣️ Unmuted.`);
+        interaction.editReply(` Unmuted.`);
     }
     else if (commandName === 'lock') {
         await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: false });
-        interaction.editReply('🔒 Locked.');
+        interaction.editReply(' Locked.');
     }
     else if (commandName === 'unlock') {
         await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: null });
-        interaction.editReply('🔓 Unlocked.');
+        interaction.editReply(' Unlocked.');
     }
     else if (commandName === 'deafen') {
         const user = options.getMember('user');
         if(!user.voice.channel) return interaction.editReply('❌ User not in voice.');
         await user.voice.setDeaf(true);
-        interaction.editReply(`🔇 Deafened ${user.user.tag}.`);
+        interaction.editReply(` Deafened ${user.user.tag}.`);
     }
     else if (commandName === 'undeafen') {
         const user = options.getMember('user');
         if(!user.voice.channel) return interaction.editReply('❌ User not in voice.');
         await user.voice.setDeaf(false);
-        interaction.editReply(`🔊 Undeafened ${user.user.tag}.`);
+        interaction.editReply(` Undeafened ${user.user.tag}.`);
     }
     else if (commandName === 'uwulock') {
         const target = options.getUser('user');
@@ -589,7 +589,7 @@ client.on('interactionCreate', async interaction => {
     else if (commandName === 'afk') {
         const reason = options.getString('reason') || 'No reason';
         afkUsers.set(interaction.user.id, { reason, time: Date.now() });
-        interaction.editReply(`💤 AFK set: ${reason}`);
+        interaction.editReply(` AFK set: ${reason}`);
     }
     else if (commandName === 'snipe') {
         const snipedMsg = snipes.get(interaction.channelId);
