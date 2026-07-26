@@ -30,7 +30,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent, // CRITICAL FOR PREFIX COMMANDS
+    GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessageReactions,
@@ -132,13 +132,13 @@ const commands = [
   { name: 'autorole-setup', description: 'Set auto role', options: [{ name: 'role', description: 'Role to give new members', type: 8, required: true }], default_member_permissions: '8' },
   { name: 'skullboard-setup', description: 'Skullboard setup', options: [{ name: 'channel', description: 'Where to log skulls', type: 7, required: true }], default_member_permissions: '8' },
   { name: 'boost-setup', description: 'Set boost announcement', options: [{ name: 'channel', description: 'Where to announce boosts', type: 7, required: true }, { name: 'message', description: 'Custom msg (Use {user})', type: 3, required: false }], default_member_permissions: '8' },
-  { name: 'reactionrole', description: 'Reaction Role', options: [{ name: 'role', description: 'Role to give', type: 8, required: true }, { name: 'description', description: 'Message text', type: 3, required: true }, { name: 'emoji', description: 'Emoji to click', type: 3, required: false }], default_member_permissions: '8' }
+  { name: 'reactionrole', description: 'Reaction Role Button', options: [{ name: 'role', description: 'Role to give', type: 8, required: true }, { name: 'description', description: 'Message text', type: 3, required: true }, { name: 'emoji', description: 'Emoji on button', type: 3, required: false }], default_member_permissions: '8' }
 ];
 
-// --- STARTUP (WIPES GLOBALS & REFRESHES COMMANDS) ---
+// --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('Vezeryl Balls', { type: ActivityType.Playing });
+  client.user.setActivity('just kill me', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -150,7 +150,7 @@ client.once(Events.ClientReady, async () => {
 
       console.log('Registering commands to target server...');
       await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-      console.log('✅ Commands Successfully Refreshed & Registered!');
+      console.log('Commands successfully refreshed and registered.');
     }
   } catch (error) { console.error('Slash error:', error); }
 });
@@ -193,13 +193,13 @@ client.on('messageCreate', async message => {
   if (message.mentions.users.size > 0) {
     message.mentions.users.forEach(user => {
       if (afkUsers.has(user.id)) {
-        message.reply(`💤 **${user.username}** is AFK: ${afkUsers.get(user.id).reason}`);
+        message.reply(`**${user.username}** is AFK: ${afkUsers.get(user.id).reason}`);
       }
     });
   }
   if (afkUsers.has(message.author.id)) {
     afkUsers.delete(message.author.id);
-    message.reply(`👋 Welcome back **${message.author.username}**! AFK status removed.`);
+    message.reply(`Welcome back **${message.author.username}**! AFK status removed.`);
   }
 
   // 4. AUTO REACT
@@ -222,7 +222,7 @@ client.on('messageCreate', async message => {
   const command = args.shift().toLowerCase();
 
   try {
-    if (command === 'ping') return message.reply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
+    if (command === 'ping') return message.reply(`Pong! ${Math.round(client.ws.ping)}ms`);
     
     if (command === 'talk') {
         if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply("❌ You need Admin permissions.");
@@ -236,7 +236,7 @@ client.on('messageCreate', async message => {
         if(!target) return message.reply('Mention someone to ban.');
         if(!target.bannable) return message.reply('❌ Cannot ban target.');
         await target.ban(); 
-        message.reply(` Banned **${target.user.tag}**`);
+        message.reply(`Banned **${target.user.tag}**`);
     }
     
     if (command === 'kick') {
@@ -245,11 +245,11 @@ client.on('messageCreate', async message => {
         if(!target) return message.reply('Mention someone to kick.');
         if(!target.kickable) return message.reply('❌ Cannot kick target.');
         await target.kick(); 
-        message.reply(` Kicked **${target.user.tag}**`);
+        message.reply(`Kicked **${target.user.tag}**`);
     }
 
     if (command === 'help') {
-        const embed = new EmbedBuilder().setTitle('📜 Bot Command Manual').setColor(0x00AAFF).setDescription(`**Prefix:** \`${serverPrefix}\`\nUse \`/\` for Slash Commands or \`${serverPrefix}\` for text commands.`);
+        const embed = new EmbedBuilder().setTitle('Bot Command Manual').setColor(0x00AAFF).setDescription(`**Prefix:** \`${serverPrefix}\`\nUse \`/\` for Slash Commands or \`${serverPrefix}\` for text commands.`);
         message.reply({embeds:[embed]});
     }
 
@@ -262,7 +262,7 @@ client.on('messageCreate', async message => {
     if (command === 'afk') {
         const reason = args.join(' ') || 'No reason specified';
         afkUsers.set(message.author.id, { reason, time: Date.now() });
-        message.reply(`💤 Set your AFK status: ${reason}`);
+        message.reply(`Set your AFK status: ${reason}`);
     }
 
     if (command === 'snipe') {
@@ -279,21 +279,31 @@ client.on('messageCreate', async message => {
 client.on('interactionCreate', async interaction => {
   if (!interaction.guild || interaction.guild.id !== GUILD_ID) return;
 
-  // BUTTON CLICK HANDLER
+  // BUTTON CLICK HANDLER (TICKETS & REACTION ROLES)
   if (interaction.isButton()) {
+    // 1. REACTION ROLE BUTTON HANDLER
     if (interaction.customId.startsWith('rr_')) {
         const roleId = interaction.customId.split('_')[1];
         const role = interaction.guild.roles.cache.get(roleId);
-        if (!role) return interaction.reply({content:'Role missing.', ephemeral:true});
-        if(interaction.member.roles.cache.has(roleId)) {
-            await interaction.member.roles.remove(roleId);
-            return interaction.reply({content:`➖ Removed **${role.name}**`, ephemeral:true});
-        } else {
-            await interaction.member.roles.add(roleId);
-            return interaction.reply({content:`➕ Added **${role.name}**`, ephemeral:true});
+        
+        if (!role) {
+          return interaction.reply({ content: '❌ Target role no longer exists.', ephemeral: true });
+        }
+
+        try {
+          if (interaction.member.roles.cache.has(roleId)) {
+              await interaction.member.roles.remove(roleId);
+              return interaction.reply({ content: `Removed role: **${role.name}**`, ephemeral: true });
+          } else {
+              await interaction.member.roles.add(roleId);
+              return interaction.reply({ content: `Added role: **${role.name}**`, ephemeral: true });
+          }
+        } catch (err) {
+          return interaction.reply({ content: '❌ Failed to update role. Check bot hierarchy/permissions.', ephemeral: true });
         }
     }
 
+    // 2. TICKET OPEN BUTTON HANDLER
     if (['ticket_ultra', 'ticket_farm', 'ticket_concern'].includes(interaction.customId)) {
         const type = interaction.customId.replace('ticket_', '');
         const chName = `${type}-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -310,6 +320,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.showModal(modal);
     }
 
+    // 3. TICKET CLOSE BUTTON HANDLER
     if (interaction.customId === 'close_ticket') {
         await interaction.reply('🔒 Closing ticket...');
         setTimeout(() => interaction.channel.delete().catch(()=>{}), 3000);
@@ -345,8 +356,8 @@ client.on('interactionCreate', async interaction => {
         if (type === 'farm' && FARM_SUPPORT_ROLE) mentions += ` <@&${FARM_SUPPORT_ROLE}>`;
         if (type === 'concern' && CONCERN_SUPPORT_ROLE) mentions += ` <@&${CONCERN_SUPPORT_ROLE}>`;
 
-        await ch.send({content: ` ${mentions}`, embeds:[embed], components:[btn]});
-        interaction.editReply(`✅ Created your ticket: ${ch}`);
+        await ch.send({content: `${mentions}`, embeds:[embed], components:[btn]});
+        interaction.editReply(`Created your ticket: ${ch}`);
     } catch(e) { 
         interaction.editReply('❌ Error creating ticket channel.'); 
     }
@@ -363,18 +374,18 @@ client.on('interactionCreate', async interaction => {
         await interaction.deferReply({ ephemeral: true }); 
         const amt = options.getInteger('amount');
         if (amt > 100) return interaction.editReply('❌ Max 100.');
-        await interaction.channel.bulkDelete(amt, true).catch(() => interaction.editReply("❌ Error deleting (too old?)."));
-        return interaction.editReply(`🗑️ Deleted ${amt}.`);
+        await interaction.channel.bulkDelete(amt, true).catch(() => interaction.editReply("❌ Error deleting (messages too old?)."));
+        return interaction.editReply(`Deleted ${amt} messages.`);
     }
 
     await interaction.deferReply({ ephemeral: false });
 
     if (commandName === 'ping') {
-        interaction.editReply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
+        interaction.editReply(`Pong! ${Math.round(client.ws.ping)}ms`);
     } 
     else if (commandName === 'talk') {
         await (options.getChannel('channel')||interaction.channel).send(options.getString('message'));
-        interaction.editReply('✅ Sent.');
+        interaction.editReply('Sent.');
     }
     else if (commandName === 'me') {
         interaction.editReply('This bot was made out of boredom by **Adlaw**.');
@@ -384,7 +395,7 @@ client.on('interactionCreate', async interaction => {
         const cfg = guildSettings.get(interaction.guildId) || {};
         cfg.prefix = newPrefix;
         guildSettings.set(interaction.guildId, cfg);
-        interaction.editReply(`✅ Prefix changed to: \`${newPrefix}\``);
+        interaction.editReply(`Prefix changed to: \`${newPrefix}\``);
     }
     else if (commandName === 'embed') {
         const title = options.getString('title');
@@ -403,26 +414,25 @@ client.on('interactionCreate', async interaction => {
         if (footer) embed.setFooter({ text: footer });
 
         await targetChannel.send({ embeds: [embed] });
-        interaction.editReply({ content: '✅ Embed sent!', ephemeral: true });
+        interaction.editReply({ content: 'Embed sent!', ephemeral: true });
     }
     else if (commandName === 'ban') {
         const user = options.getMember('user');
         if(!user.bannable) return interaction.editReply('❌ Cannot ban.');
         await user.ban({ reason: options.getString('reason') });
-        interaction.editReply(`✅ Banned **${user.user.tag}**`);
+        interaction.editReply(`Banned **${user.user.tag}**`);
     }
     else if (commandName === 'kick') {
         const user = options.getMember('user');
         if(!user.kickable) return interaction.editReply('❌ Cannot kick.');
         await user.kick(options.getString('reason'));
-        interaction.editReply(`✅ Kicked **${user.user.tag}**`);
+        interaction.editReply(`Kicked **${user.user.tag}**`);
     }
     else if (commandName === 'userinfo') {
         const user = options.getMember('user') || interaction.member;
         const embed = new EmbedBuilder().setTitle(`User: ${user.user.tag}`).addFields({name:'Joined', value:`<t:${Math.floor(user.joinedTimestamp/1000)}:R>`}).setColor(0x00AAFF);
         interaction.editReply({embeds:[embed]});
     }
-    // --- FIXED /AVATAR COMMAND HANDLER ---
     else if (commandName === 'avatar') {
         const targetUser = options.getUser('user') || interaction.user;
         const avatarUrl = targetUser.displayAvatarURL({ dynamic: true, size: 1024 });
@@ -435,11 +445,11 @@ client.on('interactionCreate', async interaction => {
         interaction.editReply({ embeds: [embed] });
     }
     else if (commandName === 'help') {
-        const embed = new EmbedBuilder().setTitle('📜 Bot Command Manual').setColor(0x00AAFF).setDescription(`**Prefix:** \`${defaultPrefix}\`\nUse \`/\` for Slash Commands or \`${defaultPrefix}\` for text commands.`)
+        const embed = new EmbedBuilder().setTitle('Bot Command Manual').setColor(0x00AAFF).setDescription(`**Prefix:** \`${defaultPrefix}\`\nUse \`/\` for Slash Commands or \`${defaultPrefix}\` for text commands.`)
             .addFields(
-                { name: '🛡️ Admin / Mod', value: '`ban`, `kick`, `mute`, `unmute`, `lock`, `unlock`, `purge`\n`deafen`, `undeafen`, `stick`, `unstick`\n`setprefix`, `talk`, `embed`, `uwulock`' },
-                { name: '🌍 Public / Fun', value: '`ping`, `afk`, `snipe`, `userinfo`, `avatar`, `me`, `help`' },
-                { name: '⚙️ Setup (Slash Only)', value: '`/ticketsetup`, `/welcome-setup`, `/leave-setup`\n`/autorole-setup`, `/autoreact-setup`\n`/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
+                { name: 'Admin / Mod', value: '`ban`, `kick`, `mute`, `unmute`, `lock`, `unlock`, `purge`\n`deafen`, `undeafen`, `stick`, `unstick`\n`setprefix`, `talk`, `embed`, `uwulock`' },
+                { name: 'Public / Fun', value: '`ping`, `afk`, `snipe`, `userinfo`, `avatar`, `me`, `help`' },
+                { name: 'Setup (Slash Only)', value: '`/ticketsetup`, `/welcome-setup`, `/leave-setup`\n`/autorole-setup`, `/autoreact-setup`\n`/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
             );
         interaction.editReply({embeds:[embed]});
     }
@@ -462,7 +472,7 @@ client.on('interactionCreate', async interaction => {
         );
 
         await channel.send({ embeds: [embed], components: [row] });
-        interaction.editReply(`✅ Single panel with 3 buttons sent to ${channel}!`);
+        interaction.editReply(`Ticket panel successfully posted to ${channel}!`);
     }
     else if (commandName === 'autoreact-setup') {
         const emoji = options.getString('emoji');
@@ -471,14 +481,14 @@ client.on('interactionCreate', async interaction => {
         if (!cfg.autoReactRoles) cfg.autoReactRoles = new Map();
         cfg.autoReactRoles.set(role.id, emoji);
         guildSettings.set(interaction.guildId, cfg);
-        interaction.editReply(`✅ React setup for **${role.name}**`);
+        interaction.editReply(`Auto-react setup for **${role.name}**`);
     }
     else if (commandName === 'autorole-setup') {
         const role = options.getRole('role');
         const cfg = guildSettings.get(interaction.guildId) || {};
         cfg.autoRoleId = role.id;
         guildSettings.set(interaction.guildId, cfg);
-        interaction.editReply(`✅ Auto role: **${role.name}**`);
+        interaction.editReply(`Auto role set: **${role.name}**`);
     }
     else if (commandName === 'welcome-setup') {
         const ch = options.getChannel('channel');
@@ -489,7 +499,7 @@ client.on('interactionCreate', async interaction => {
         cfg.welcomeImage = options.getString('image_url');
         cfg.welcomeColor = options.getString('color');
         guildSettings.set(interaction.guildId, cfg);
-        interaction.editReply('✅ Welcome set.');
+        interaction.editReply('Welcome message configured.');
     }
     else if (commandName === 'leave-setup') {
         const ch = options.getChannel('channel');
@@ -497,7 +507,7 @@ client.on('interactionCreate', async interaction => {
         cfg.leaveChannelId = ch.id;
         cfg.leaveMessage = options.getString('message');
         guildSettings.set(interaction.guildId, cfg);
-        interaction.editReply('✅ Leave set.');
+        interaction.editReply('Leave message configured.');
     }
     else if (commandName === 'boost-setup') {
         const ch = options.getChannel('channel');
@@ -505,24 +515,47 @@ client.on('interactionCreate', async interaction => {
         cfg.boostChannelId = ch.id;
         cfg.boostMessage = options.getString('message');
         guildSettings.set(interaction.guildId, cfg);
-        interaction.editReply('✅ Boost set.');
+        interaction.editReply('Boost message configured.');
     }
     else if (commandName === 'skullboard-setup') {
         const ch = options.getChannel('channel');
         const cfg = guildSettings.get(interaction.guildId) || {};
         cfg.skullboardId = ch.id;
         guildSettings.set(interaction.guildId, cfg);
-        interaction.editReply('✅ Skullboard set.');
+        interaction.editReply('Skullboard channel configured.');
     }
+    // --- REACTION ROLE CREATION COMMAND HANDLER ---
     else if (commandName === 'reactionrole') {
         const role = options.getRole('role');
         const desc = options.getString('description');
-        const emoji = options.getString('emoji');
-        const embed = new EmbedBuilder().setTitle('Get Role').setDescription(desc).setColor(role.color || 0x0099FF);
-        const btn = new ButtonBuilder().setCustomId(`rr_${role.id}`).setLabel(role.name).setStyle(ButtonStyle.Primary);
-        if (emoji) btn.setEmoji(emoji);
+        const rawEmoji = options.getString('emoji');
+
+        const embed = new EmbedBuilder()
+            .setTitle(role.name)
+            .setDescription(desc)
+            .setColor(role.color || 0x0099FF);
+
+        const btn = new ButtonBuilder()
+            .setCustomId(`rr_${role.id}`)
+            .setLabel(`Get ${role.name}`)
+            .setStyle(ButtonStyle.Primary);
+
+        if (rawEmoji) {
+            try {
+                // Parse standard or custom Discord emojis safely
+                const match = rawEmoji.match(/<a?:.+?:(\d+)>/);
+                if (match) {
+                    btn.setEmoji(match[1]);
+                } else {
+                    btn.setEmoji(rawEmoji.trim());
+                }
+            } catch (e) {
+                console.log('Emoji parsing issue on reaction role button, proceeding without emoji.');
+            }
+        }
+
         await interaction.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(btn)] });
-        interaction.editReply('✅ Reaction role created!');
+        interaction.editReply({ content: 'Reaction role button posted!', ephemeral: true });
     }
     else if (commandName === 'mute') {
         const user = options.getMember('user');
@@ -530,7 +563,7 @@ client.on('interactionCreate', async interaction => {
         const role = interaction.guild.roles.cache.find(r=>r.name==='Muted');
         if(!role) return interaction.editReply('❌ "Muted" role missing.');
         await user.roles.add(role);
-        interaction.editReply(` Muted **${user.user.tag}**`);
+        interaction.editReply(`Muted **${user.user.tag}**`);
         const ms = parseDuration(dStr);
         if(ms) setTimeout(()=> user.roles.remove(role).catch(()=>{}), ms);
     }
@@ -538,58 +571,58 @@ client.on('interactionCreate', async interaction => {
         const user = options.getMember('user');
         const role = interaction.guild.roles.cache.find(r=>r.name==='Muted');
         await user.roles.remove(role);
-        interaction.editReply(` Unmuted.`);
+        interaction.editReply('Unmuted.');
     }
     else if (commandName === 'lock') {
         await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: false });
-        interaction.editReply(' Locked.');
+        interaction.editReply('Locked.');
     }
     else if (commandName === 'unlock') {
         await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: null });
-        interaction.editReply(' Unlocked.');
+        interaction.editReply('Unlocked.');
     }
     else if (commandName === 'deafen') {
         const user = options.getMember('user');
-        if(!user.voice.channel) return interaction.editReply('❌ User not in voice.');
+        if(!user.voice.channel) return interaction.editReply('❌ User not in voice channel.');
         await user.voice.setDeaf(true);
-        interaction.editReply(` Deafened ${user.user.tag}.`);
+        interaction.editReply(`Deafened ${user.user.tag}.`);
     }
     else if (commandName === 'undeafen') {
         const user = options.getMember('user');
-        if(!user.voice.channel) return interaction.editReply('❌ User not in voice.');
+        if(!user.voice.channel) return interaction.editReply('❌ User not in voice channel.');
         await user.voice.setDeaf(false);
-        interaction.editReply(` Undeafened ${user.user.tag}.`);
+        interaction.editReply(`Undeafened ${user.user.tag}.`);
     }
     else if (commandName === 'uwulock') {
         const target = options.getUser('user');
         uwuTargets.add(target.id);
-        interaction.editReply(`🌸 **${target.username}** is now UwU locked!`);
+        interaction.editReply(`**${target.username}** is now UwU locked.`);
     }
     else if (commandName === 'uwuunlock') {
         const target = options.getUser('user');
         uwuTargets.delete(target.id);
-        interaction.editReply(`🛑 **${target.username}** is free.`);
+        interaction.editReply(`**${target.username}** is freed from UwU lock.`);
     }
     else if (commandName === 'stick') {
         const text = options.getString('message');
         const sent = await interaction.channel.send(`**reminder**\n${text}`);
         stickyMessages.set(interaction.channelId, { content: text, lastMsgId: sent.id });
-        interaction.editReply({content: '✅ Message stuck!', ephemeral: true});
+        interaction.editReply({content: 'Message stuck!', ephemeral: true});
     }
     else if (commandName === 'unstick') {
         if (stickyMessages.has(interaction.channelId)) {
             const d = stickyMessages.get(interaction.channelId);
             interaction.channel.messages.delete(d.lastMsgId).catch(()=>{});
             stickyMessages.delete(interaction.channelId);
-            interaction.editReply('✅ Reminder removed.');
+            interaction.editReply('Reminder removed.');
         } else {
-            interaction.editReply('❌ No sticky message here.');
+            interaction.editReply('❌ No sticky message in this channel.');
         }
     }
     else if (commandName === 'afk') {
         const reason = options.getString('reason') || 'No reason';
         afkUsers.set(interaction.user.id, { reason, time: Date.now() });
-        interaction.editReply(` AFK set: ${reason}`);
+        interaction.editReply(`AFK set: ${reason}`);
     }
     else if (commandName === 'snipe') {
         const snipedMsg = snipes.get(interaction.channelId);
