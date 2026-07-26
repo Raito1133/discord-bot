@@ -128,7 +128,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('Watching Nocte Server', { type: ActivityType.Listening });
+  client.user.setActivity('Watching Sirea', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   try {
     if (GUILD_ID === 'PASTE_YOUR_SERVER_ID_HERE') {
