@@ -30,7 +30,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.MessageContent, // CRITICAL FOR PREFIX COMMANDS
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessageReactions,
@@ -114,7 +114,7 @@ const commands = [
   { name: 'snipe', description: 'Show last deleted msg' },
   { name: 'help', description: 'Show commands' },
   { name: 'userinfo', description: 'Get user info', options: [{ name: 'user', description: 'User', type: 6, required: false }] },
-  { name: 'avatar', description: 'Get avatar', options: [{ name: 'user', description: 'User', type: 6, required: false }] },
+  { name: 'avatar', description: 'Get avatar of a user', options: [{ name: 'user', description: 'Select user', type: 6, required: false }] },
   { name: 'welcome-setup', description: 'Setup welcome message', options: [{ name: 'channel', description: 'Channel', type: 7, required: true }, { name: 'message', description: 'Message', type: 3, required: false }, { name: 'type', description: 'Style', type: 3, required: false, choices: [{ name: 'Text', value: 'text' }, { name: 'Embed', value: 'embed' }] }, { name: 'image_url', description: 'Image Link (GIF/PNG) for Embed', type: 3, required: false }, { name: 'color', description: 'Hex Color (e.g. #FF0000)', type: 3, required: false }], default_member_permissions: '8' },
   { name: 'leave-setup', description: 'Setup leave message', options: [{ name: 'channel', description: 'Channel', type: 7, required: true }, { name: 'message', description: 'Message', type: 3, required: false }], default_member_permissions: '8' },
   { 
@@ -135,10 +135,10 @@ const commands = [
   { name: 'reactionrole', description: 'Reaction Role', options: [{ name: 'role', description: 'Role to give', type: 8, required: true }, { name: 'description', description: 'Message text', type: 3, required: true }, { name: 'emoji', description: 'Emoji to click', type: 3, required: false }], default_member_permissions: '8' }
 ];
 
-// --- STARTUP ---
+// --- STARTUP (WIPES GLOBALS & REFRESHES COMMANDS) ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('Adlaw', { type: ActivityType.Watching });
+  client.user.setActivity('Vezeryl Balls', { type: ActivityType.Playing });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -148,17 +148,28 @@ client.once(Events.ClientReady, async () => {
       console.log('Clearing global commands...');
       await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
 
-      console.log('Registering commands to your server...');
+      console.log('Registering commands to target server...');
       await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-      console.log('✅ Commands Ready!');
+      console.log('✅ Commands Successfully Refreshed & Registered!');
     }
   } catch (error) { console.error('Slash error:', error); }
+});
+
+// --- TRACK DELETED MESSAGES FOR SNIPE ---
+client.on('messageDelete', message => {
+  if (message.author?.bot) return;
+  snipes.set(message.channel.id, {
+    content: message.content,
+    author: message.author,
+    image: message.attachments.first() ? message.attachments.first().proxyURL : null
+  });
 });
 
 // --- PREFIX HANDLER (!) ---
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild || message.guild.id !== GUILD_ID) return;
 
+  // 1. UWU LOCK
   if (uwuTargets.has(message.author.id)) {
     try {
       await message.delete();
@@ -169,6 +180,7 @@ client.on('messageCreate', async message => {
     } catch (e) {}
   }
 
+  // 2. STICKY MESSAGE RE-POST
   if (stickyMessages.has(message.channel.id)) {
     const stickyData = stickyMessages.get(message.channel.id);
     if (stickyData.lastMsgId) message.channel.messages.delete(stickyData.lastMsgId).catch(() => {});
@@ -177,6 +189,7 @@ client.on('messageCreate', async message => {
     stickyMessages.set(message.channel.id, stickyData);
   }
 
+  // 3. AFK NOTIFICATIONS
   if (message.mentions.users.size > 0) {
     message.mentions.users.forEach(user => {
       if (afkUsers.has(user.id)) {
@@ -186,20 +199,78 @@ client.on('messageCreate', async message => {
   }
   if (afkUsers.has(message.author.id)) {
     afkUsers.delete(message.author.id);
-    message.reply(`👋 Welcome back **${message.author.username}**! AFK removed.`);
+    message.reply(`👋 Welcome back **${message.author.username}**! AFK status removed.`);
   }
 
+  // 4. AUTO REACT
   const config = guildSettings.get(message.guild.id);
+  if (config && config.autoReactRoles && message.member) {
+      message.member.roles.cache.forEach(role => {
+          if (config.autoReactRoles.has(role.id)) {
+              const emoji = config.autoReactRoles.get(role.id);
+              const emojiId = emoji.match(/<a?:.+?:(\d+)>/) ? emoji.match(/<a?:.+?:(\d+)>/)[1] : emoji;
+              message.react(emojiId).catch(() => {});
+          }
+      });
+  }
+
+  // 5. PREFIX COMMAND PROCESSING
   const serverPrefix = config?.prefix || defaultPrefix;
   if (!message.content.startsWith(serverPrefix)) return;
+
   const args = message.content.slice(serverPrefix.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
   try {
     if (command === 'ping') return message.reply(`🏓 Pong! ${Math.round(client.ws.ping)}ms`);
+    
+    if (command === 'talk') {
+        if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply("❌ You need Admin permissions.");
+        message.delete().catch(()=>{});
+        return message.channel.send(args.join(' ') || 'What should I say?');
+    }
+    
+    if (command === 'ban') {
+        if(!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return message.reply("❌ You need Ban Members permission.");
+        const target = message.mentions.members.first();
+        if(!target) return message.reply('Mention someone to ban.');
+        if(!target.bannable) return message.reply('❌ Cannot ban target.');
+        await target.ban(); 
+        message.reply(`🔨 Banned **${target.user.tag}**`);
+    }
+    
+    if (command === 'kick') {
+        if(!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return message.reply("❌ You need Kick Members permission.");
+        const target = message.mentions.members.first();
+        if(!target) return message.reply('Mention someone to kick.');
+        if(!target.kickable) return message.reply('❌ Cannot kick target.');
+        await target.kick(); 
+        message.reply(`🦵 Kicked **${target.user.tag}**`);
+    }
+
     if (command === 'help') {
-        const embed = new EmbedBuilder().setTitle('📜 Bot Command Manual').setColor(0x00AAFF).setDescription(`**Prefix:** \`${serverPrefix}\``);
+        const embed = new EmbedBuilder().setTitle('📜 Bot Command Manual').setColor(0x00AAFF).setDescription(`**Prefix:** \`${serverPrefix}\`\nUse \`/\` for Slash Commands or \`${serverPrefix}\` for text commands.`);
         message.reply({embeds:[embed]});
+    }
+
+    if (command === 'userinfo') {
+        const member = message.mentions.members.first() || message.member;
+        const embed = new EmbedBuilder().setTitle(`User: ${member.user.tag}`).addFields({name:'Joined', value: `<t:${Math.floor(member.joinedTimestamp/1000)}:R>`}).setColor(0x00AAFF);
+        message.reply({embeds:[embed]});
+    }
+
+    if (command === 'afk') {
+        const reason = args.join(' ') || 'No reason specified';
+        afkUsers.set(message.author.id, { reason, time: Date.now() });
+        message.reply(`💤 Set your AFK status: ${reason}`);
+    }
+
+    if (command === 'snipe') {
+        const snipedMsg = snipes.get(message.channel.id);
+        if (!snipedMsg) return message.reply('❌ Nothing to snipe!');
+        const embed = new EmbedBuilder().setAuthor({ name: snipedMsg.author.tag, iconURL: snipedMsg.author.displayAvatarURL() }).setDescription(snipedMsg.content || '*(Attachment)*').setColor(0xFF0000).setFooter({text:'Deleted recently'});
+        if(snipedMsg.image) embed.setImage(snipedMsg.image);
+        message.reply({ embeds: [embed] });
     }
   } catch (e) { console.error('Prefix Error:', e); }
 });
@@ -213,7 +284,7 @@ client.on('interactionCreate', async interaction => {
     if (interaction.customId.startsWith('rr_')) {
         const roleId = interaction.customId.split('_')[1];
         const role = interaction.guild.roles.cache.get(roleId);
-        if (!role) return interaction.reply({content:'Role deleted?', ephemeral:true});
+        if (!role) return interaction.reply({content:'Role missing.', ephemeral:true});
         if(interaction.member.roles.cache.has(roleId)) {
             await interaction.member.roles.remove(roleId);
             return interaction.reply({content:`➖ Removed **${role.name}**`, ephemeral:true});
@@ -223,7 +294,6 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // TICKET BUTTON CLICKS
     if (['ticket_ultra', 'ticket_farm', 'ticket_concern'].includes(interaction.customId)) {
         const type = interaction.customId.replace('ticket_', '');
         const chName = `${type}-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -285,7 +355,7 @@ client.on('interactionCreate', async interaction => {
 
   if (!interaction.isChatInputCommand()) return;
 
-  // --- ALL SLASH COMMAND HANDLERS RESTORED ---
+  // --- SLASH COMMAND HANDLERS ---
   try {
     const { commandName, options } = interaction;
 
@@ -306,7 +376,6 @@ client.on('interactionCreate', async interaction => {
         await (options.getChannel('channel')||interaction.channel).send(options.getString('message'));
         interaction.editReply('✅ Sent.');
     }
-    // YOU CAN CUSTOMIZE YOUR /ME MESSAGE HERE!
     else if (commandName === 'me') {
         interaction.editReply('This bot was made out of boredom by **Enkkd**.');
     }
@@ -352,6 +421,18 @@ client.on('interactionCreate', async interaction => {
         const user = options.getMember('user') || interaction.member;
         const embed = new EmbedBuilder().setTitle(`User: ${user.user.tag}`).addFields({name:'Joined', value:`<t:${Math.floor(user.joinedTimestamp/1000)}:R>`}).setColor(0x00AAFF);
         interaction.editReply({embeds:[embed]});
+    }
+    // --- FIXED /AVATAR COMMAND HANDLER ---
+    else if (commandName === 'avatar') {
+        const targetUser = options.getUser('user') || interaction.user;
+        const avatarUrl = targetUser.displayAvatarURL({ dynamic: true, size: 1024 });
+        
+        const embed = new EmbedBuilder()
+            .setTitle(`Avatar for ${targetUser.username}`)
+            .setImage(avatarUrl)
+            .setColor(0x00AAFF);
+
+        interaction.editReply({ embeds: [embed] });
     }
     else if (commandName === 'help') {
         const embed = new EmbedBuilder().setTitle('📜 Bot Command Manual').setColor(0x00AAFF).setDescription(`**Prefix:** \`${defaultPrefix}\`\nUse \`/\` for Slash Commands or \`${defaultPrefix}\` for text commands.`)
@@ -513,7 +594,7 @@ client.on('interactionCreate', async interaction => {
     else if (commandName === 'snipe') {
         const snipedMsg = snipes.get(interaction.channelId);
         if (!snipedMsg) return interaction.editReply('❌ Nothing to snipe!');
-        const embed = new EmbedBuilder().setAuthor({ name: snipedMsg.author.tag, iconURL: snipedMsg.author.displayAvatarURL() }).setDescription(snipedMsg.content || '*(Image)*').setColor(0xFF0000).setFooter({text:'Deleted recently'});
+        const embed = new EmbedBuilder().setAuthor({ name: snipedMsg.author.tag, iconURL: snipedMsg.author.displayAvatarURL() }).setDescription(snipedMsg.content || '*(Attachment)*').setColor(0xFF0000).setFooter({text:'Deleted recently'});
         if(snipedMsg.image) embed.setImage(snipedMsg.image);
         interaction.editReply({ embeds: [embed] });
     }
