@@ -18,10 +18,10 @@ const {
 } = require('discord.js');
 
 // --- ⚠️ CONFIGURATION ⚠️ ---
-const GUILD_ID = '1243470533316579361'; // Your Server ID
+const GUILD_ID = '1371775026264670228'; // Your Server ID
 
 // PASTE THE ROLE ID OF THE ADMINS/MODS YOU WANT PINGED IN TICKETS:
-const TICKET_SUPPORT_ROLE = '1249714120853553172'; 
+const TICKET_SUPPORT_ROLE = '1529499021884919858'; 
 // ---------------------------
 
 const client = new Client({
@@ -578,4 +578,4 @@ process.on('uncaughtException', (err, origin) => console.log('Anti-Crash: ', err
 
 // PASTE TOKEN HERE
 console.log('Starting bot, trying to login...');
-client.login(process.env.TOKEN);
+client.login(MTQ2MDYxNzg4MzA4NzU0MDI3NQ.G67nEU.25GbBVoMmOWO3QcEKL_2ffftM8mG7W1qScf51s);
