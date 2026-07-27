@@ -122,9 +122,7 @@ const commands = [
     description: 'Create the multi-button ticket panel', 
     options: [
       { name: 'channel', description: 'Where to post the panel', type: 7, required: true }, 
-      { name: 'category', description: 'Where to open ticket channels', type: 7, channel_types: [4], required: false }, 
-      { name: 'title', description: 'Panel Title', type: 3, required: false }, 
-      { name: 'description', description: 'Panel Description', type: 3, required: false }
+      { name: 'category', description: 'Where to open ticket channels', type: 7, channel_types: [4], required: false }
     ], 
     default_member_permissions: '8' 
   },
@@ -156,7 +154,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('hey you', { type: ActivityType.Listening });
+  client.user.setActivity('Sindria', { type: ActivityType.Watching });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -347,39 +345,78 @@ client.on('interactionCreate', async interaction => {
   }
 
   // MODAL SUBMISSIONS
-  if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_')) {
-    await interaction.deferReply({ ephemeral: true });
-    const type = interaction.customId.replace('modal_', '');
-    const subject = interaction.fields.getTextInputValue('ticket_subject');
-    const desc = interaction.fields.getTextInputValue('ticket_desc');
-    const chName = `${type}-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
-    const config = guildSettings.get(interaction.guild.id) || {};
-    
-    try {
-        const ch = await interaction.guild.channels.create({
-            name: chName, 
-            type: ChannelType.GuildText, 
-            parent: config.ticketCategory,
-            permissionOverwrites: [
-              { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, 
-              { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel] }
-            ]
-        });
-
-        const embed = new EmbedBuilder().setTitle(`Ticket (${type.toUpperCase()}): ${subject}`).setDescription(`**User:** ${interaction.user}\n**Desc:** ${desc}`).setColor(0x0099FF);
-        const btn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒'));
+  if (interaction.isModalSubmit()) {
+    // A. TICKET SETUP MODAL (METHOD A: ALLOWS SHIFT + ENTER)
+    if (interaction.customId.startsWith('ts_modal_')) {
+        await interaction.deferReply({ ephemeral: true });
         
-        let mentions = `${interaction.user}`;
-        if (type === 'ultra' && ULTRA_SUPPORT_ROLE) mentions += ` <@&${ULTRA_SUPPORT_ROLE}>`;
-        if (type === 'farm' && FARM_SUPPORT_ROLE) mentions += ` <@&${FARM_SUPPORT_ROLE}>`;
-        if (type === 'concern' && CONCERN_SUPPORT_ROLE) mentions += ` <@&${CONCERN_SUPPORT_ROLE}>`;
+        const parts = interaction.customId.split('_');
+        const channelId = parts[2];
+        const categoryId = parts[3];
 
-        await ch.send({content: `${mentions}`, embeds:[embed], components:[btn]});
-        interaction.editReply(`Created your ticket: ${ch}`);
-    } catch(e) { 
-        interaction.editReply('❌ Error creating ticket channel.'); 
+        const title = interaction.fields.getTextInputValue('panel_title');
+        const desc = interaction.fields.getTextInputValue('panel_desc');
+
+        const channel = interaction.guild.channels.cache.get(channelId);
+        
+        if (categoryId !== 'none') {
+            const cfg = guildSettings.get(interaction.guildId) || {};
+            cfg.ticketCategory = categoryId;
+            guildSettings.set(interaction.guildId, cfg);
+        }
+
+        const embed = new EmbedBuilder().setTitle(title).setDescription(desc).setColor(0x2F3136);
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('ticket_ultra').setLabel('Ultra Help').setStyle(ButtonStyle.Danger).setEmoji('⚔️'),
+          new ButtonBuilder().setCustomId('ticket_farm').setLabel('Farm Help').setStyle(ButtonStyle.Success).setEmoji('👾'),
+          new ButtonBuilder().setCustomId('ticket_concern').setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('🎟️')
+        );
+
+        if (channel) {
+            await channel.send({ embeds: [embed], components: [row] });
+            interaction.editReply(`Ticket panel successfully posted to ${channel}!`);
+        } else {
+            interaction.editReply('❌ Could not find target channel.');
+        }
+        return;
     }
-    return;
+
+    // B. USER TICKET CREATION MODAL
+    if (interaction.customId.startsWith('modal_')) {
+        await interaction.deferReply({ ephemeral: true });
+        const type = interaction.customId.replace('modal_', '');
+        const subject = interaction.fields.getTextInputValue('ticket_subject');
+        const desc = interaction.fields.getTextInputValue('ticket_desc');
+        const chName = `${type}-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+        const config = guildSettings.get(interaction.guild.id) || {};
+        
+        try {
+            const ch = await interaction.guild.channels.create({
+                name: chName, 
+                type: ChannelType.GuildText, 
+                parent: config.ticketCategory,
+                permissionOverwrites: [
+                  { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, 
+                  { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel] }
+                ]
+            });
+
+            const embed = new EmbedBuilder().setTitle(`Ticket (${type.toUpperCase()}): ${subject}`).setDescription(`**User:** ${interaction.user}\n**Desc:** ${desc}`).setColor(0x0099FF);
+            const btn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒'));
+            
+            let mentions = `${interaction.user}`;
+            if (type === 'ultra' && ULTRA_SUPPORT_ROLE) mentions += ` <@&${ULTRA_SUPPORT_ROLE}>`;
+            if (type === 'farm' && FARM_SUPPORT_ROLE) mentions += ` <@&${FARM_SUPPORT_ROLE}>`;
+            if (type === 'concern' && CONCERN_SUPPORT_ROLE) mentions += ` <@&${CONCERN_SUPPORT_ROLE}>`;
+
+            await ch.send({content: `${mentions}`, embeds:[embed], components:[btn]});
+            interaction.editReply(`Created your ticket: ${ch}`);
+        } catch(e) { 
+            interaction.editReply('❌ Error creating ticket channel.'); 
+        }
+        return;
+    }
   }
 
   if (!interaction.isChatInputCommand()) return;
@@ -387,6 +424,35 @@ client.on('interactionCreate', async interaction => {
   // --- SLASH COMMAND HANDLERS ---
   try {
     const { commandName, options } = interaction;
+
+    if (commandName === 'ticketsetup') {
+        const channel = options.getChannel('channel');
+        const category = options.getChannel('category');
+
+        const modal = new ModalBuilder()
+            .setCustomId(`ts_modal_${channel.id}_${category ? category.id : 'none'}`)
+            .setTitle('Ticket Panel Setup');
+
+        const titleInput = new TextInputBuilder()
+            .setCustomId('panel_title')
+            .setLabel('Panel Title')
+            .setStyle(TextInputStyle.Short)
+            .setValue('Please select the specific ticket for your concern.')
+            .setRequired(true);
+
+        const descInput = new TextInputBuilder()
+            .setCustomId('panel_desc')
+            .setLabel('Description (Shift + Enter supported!)')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true);
+
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(titleInput),
+            new ActionRowBuilder().addComponents(descInput)
+        );
+
+        return await interaction.showModal(modal);
+    }
 
     if (commandName === 'purge') {
         await interaction.deferReply({ ephemeral: true }); 
@@ -471,27 +537,6 @@ client.on('interactionCreate', async interaction => {
             );
         interaction.editReply({embeds:[embed]});
     }
-    else if (commandName === 'ticketsetup') {
-        const title = options.getString('title') || 'Support & Assistance Panel';
-        const desc = options.getString('description') || 'Select a category below to open a ticket with support:';
-        const channel = options.getChannel('channel');
-        const category = options.getChannel('category');
-
-        const cfg = guildSettings.get(interaction.guildId) || {};
-        if (category) cfg.ticketCategory = category.id;
-        guildSettings.set(interaction.guildId, cfg);
-
-        const embed = new EmbedBuilder().setTitle(title).setDescription(desc).setColor(0x2F3136);
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('ticket_ultra').setLabel('Ultra Help').setStyle(ButtonStyle.Danger).setEmoji('⚔️'),
-          new ButtonBuilder().setCustomId('ticket_farm').setLabel('Farm Help').setStyle(ButtonStyle.Success).setEmoji('👾'),
-          new ButtonBuilder().setCustomId('ticket_concern').setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('🎟️')
-        );
-
-        await channel.send({ embeds: [embed], components: [row] });
-        interaction.editReply(`Ticket panel successfully posted to ${channel}!`);
-    }
     else if (commandName === 'autoreact-setup') {
         const emoji = options.getString('emoji');
         const role = options.getRole('role');
@@ -542,7 +587,6 @@ client.on('interactionCreate', async interaction => {
         guildSettings.set(interaction.guildId, cfg);
         interaction.editReply('Skullboard channel configured.');
     }
-    // --- MULTI-BUTTON REACTION ROLE CREATION COMMAND HANDLER ---
     else if (commandName === 'reactionrole') {
         const title = options.getString('title');
         const desc = options.getString('description');
@@ -554,7 +598,6 @@ client.on('interactionCreate', async interaction => {
 
         const row = new ActionRowBuilder();
 
-        // Loop through all 5 potential role slots
         for (let i = 1; i <= 5; i++) {
             const role = options.getRole(`role${i}`);
             const rawEmoji = options.getString(`emoji${i}`);
