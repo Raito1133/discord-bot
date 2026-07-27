@@ -164,7 +164,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('ishma', { type: ActivityType.Listening });
+  client.user.setActivity('Syntry send dih', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -343,6 +343,14 @@ client.on('interactionCreate', async interaction => {
             ),
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
+                    .setCustomId('aqw_guild')
+                    .setLabel('AQW Guild (Optional)')
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('Enter your current in-game guild')
+                    .setRequired(false)
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
                     .setCustomId('aqw_inviter')
                     .setLabel('Who invited you? (Optional)')
                     .setStyle(TextInputStyle.Short)
@@ -374,11 +382,16 @@ client.on('interactionCreate', async interaction => {
             await targetMember.setNickname(ign).catch(() => {});
             await interaction.editReply(`✅ Approved verification for ${targetMember.user.tag} (${ign})!`);
             
-            // Disable buttons on log message
+            // Update embed status and disable buttons on log message
+            const oldEmbed = interaction.message.embeds[0];
+            const updatedEmbed = EmbedBuilder.from(oldEmbed)
+                .setColor(0x00FF00)
+                .setFooter({ text: `Approved by ${interaction.user.tag}` });
+
             const disabledRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('done_app').setLabel(`Approved by ${interaction.user.username}`).setStyle(ButtonStyle.Success).setDisabled(true)
             );
-            await interaction.message.edit({ components: [disabledRow] });
+            await interaction.message.edit({ embeds: [updatedEmbed], components: [disabledRow] });
         } else {
             interaction.editReply('❌ User is no longer in this server.');
         }
@@ -399,10 +412,15 @@ client.on('interactionCreate', async interaction => {
             await targetMember.setNickname(null).catch(() => {});
             await interaction.editReply(`❌ Rejected verification for ${targetMember.user.tag}.`);
             
+            const oldEmbed = interaction.message.embeds[0];
+            const updatedEmbed = EmbedBuilder.from(oldEmbed)
+                .setColor(0xFF0000)
+                .setFooter({ text: `Rejected by ${interaction.user.tag}` });
+
             const disabledRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('done_rej').setLabel(`Rejected by ${interaction.user.username}`).setStyle(ButtonStyle.Danger).setDisabled(true)
             );
-            await interaction.message.edit({ components: [disabledRow] });
+            await interaction.message.edit({ embeds: [updatedEmbed], components: [disabledRow] });
         } else {
             interaction.editReply('❌ User is no longer in this server.');
         }
@@ -493,11 +511,12 @@ client.on('interactionCreate', async interaction => {
         await interaction.deferReply({ ephemeral: true });
 
         const ign = interaction.fields.getTextInputValue('aqw_name').trim();
+        const guildInput = interaction.fields.getTextInputValue('aqw_guild')?.trim() || 'None';
         const inviterInput = interaction.fields.getTextInputValue('aqw_inviter')?.trim() || '';
 
         const config = guildSettings.get(interaction.guild.id) || {};
         
-        // Immediately rename user nickname to their IGN
+        // Rename user nickname to their submitted IGN
         try {
             await interaction.member.setNickname(ign);
         } catch (e) {
@@ -515,19 +534,26 @@ client.on('interactionCreate', async interaction => {
             if (foundInviter) {
                 inviterText = `${foundInviter} invited me`;
             } else {
-                inviterText = `${inviterInput} invited me  (not found)`;
+                inviterText = `${inviterInput} invited me`;
             }
         }
 
-        // Build log message
         const logRoleText = config.verifyRoleId ? `<@&${config.verifyRoleId}>` : '@unknown-role';
-        const now = new Date();
-        const timestampUnix = Math.floor(now.getTime() / 1000);
-        const isoString = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-
         const charPageUrl = `https://account.aq.com/CharPage?id=${encodeURIComponent(ign)}`;
 
-        const logMessage = `Verification Submission Received:\nUser: ${interaction.user}\nAQW Username: [${ign}](${charPageUrl})\nRole Target: ${logRoleText}\nInvited By: ${inviterText}\nSubmitted: ${isoString} • <t:${timestampUnix}:R>`;
+        // Build Pretty Verification Log Embed
+        const logEmbed = new EmbedBuilder()
+            .setTitle('📋 New Verification Request')
+            .setColor(0xFFA500)
+            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: 'User', value: `${interaction.user}`, inline: true },
+                { name: 'AQW Username', value: `[${ign}](${charPageUrl})`, inline: true },
+                { name: 'Guild', value: guildInput, inline: true },
+                { name: 'Role To Give', value: logRoleText, inline: true },
+                { name: 'Invited By', value: inviterText, inline: true }
+            )
+            .setTimestamp();
 
         const adminActionRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -542,11 +568,11 @@ client.on('interactionCreate', async interaction => {
                 .setEmoji('✖️')
         );
 
-        // Send to Log Channel
+        // Send Embed to Log Channel
         if (config.verifyLogChannelId) {
             const logCh = interaction.guild.channels.cache.get(config.verifyLogChannelId);
             if (logCh) {
-                await logCh.send({ content: logMessage, components: [adminActionRow] });
+                await logCh.send({ embeds: [logEmbed], components: [adminActionRow] });
             }
         }
 
