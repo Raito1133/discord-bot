@@ -154,7 +154,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('Sindria', { type: ActivityType.Watching });
+  client.user.setActivity('Sindria Guild', { type: ActivityType.Watching });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -330,7 +330,7 @@ client.on('interactionCreate', async interaction => {
 
         const modal = new ModalBuilder().setCustomId(`modal_${type}`).setTitle(`Open ${type.toUpperCase()} Ticket`);
         modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_subject').setLabel('Subject').setStyle(TextInputStyle.Short).setRequired(true)),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_subject').setLabel('Reason').setStyle(TextInputStyle.Short).setRequired(true)),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_desc').setLabel('Description').setStyle(TextInputStyle.Paragraph).setRequired(true))
         );
         await interaction.showModal(modal);
@@ -392,27 +392,57 @@ client.on('interactionCreate', async interaction => {
         const config = guildSettings.get(interaction.guild.id) || {};
         
         try {
+            // --- CONFIGURE PERMISSIONS BASED ON TICKET TYPE ---
+            let overwrites = [];
+
+            if (type === 'ultra' || type === 'farm') {
+                // Everyone can view Ultra and Farm tickets
+                overwrites = [
+                  { id: interaction.guild.id, allow: [PermissionsBitField.Flags.ViewChannel] }
+                ];
+            } else if (type === 'concern') {
+                // Private: Hide from @everyone, allow only Creator, Concern Role, and Admins
+                overwrites = [
+                  { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, 
+                  { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel] }
+                ];
+
+                // Add CONCERN_SUPPORT_ROLE permission if defined
+                if (CONCERN_SUPPORT_ROLE) {
+                    overwrites.push({
+                        id: CONCERN_SUPPORT_ROLE,
+                        allow: [PermissionsBitField.Flags.ViewChannel]
+                    });
+                }
+            }
+
+            // Create the ticket channel
             const ch = await interaction.guild.channels.create({
                 name: chName, 
                 type: ChannelType.GuildText, 
                 parent: config.ticketCategory,
-                permissionOverwrites: [
-                  { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, 
-                  { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel] }
-                ]
+                permissionOverwrites: overwrites
             });
 
-            const embed = new EmbedBuilder().setTitle(`Ticket (${type.toUpperCase()}): ${subject}`).setDescription(`**User:** ${interaction.user}\n**Desc:** ${desc}`).setColor(0x0099FF);
-            const btn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒'));
+            const embed = new EmbedBuilder()
+                .setTitle(`Ticket (${type.toUpperCase()}): ${subject}`)
+                .setDescription(`**User:** ${interaction.user}\n**Desc:** ${desc}`)
+                .setColor(0x0099FF);
+                
+            const btn = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+            );
             
+            // Build role mentions based on ticket type
             let mentions = `${interaction.user}`;
             if (type === 'ultra' && ULTRA_SUPPORT_ROLE) mentions += ` <@&${ULTRA_SUPPORT_ROLE}>`;
             if (type === 'farm' && FARM_SUPPORT_ROLE) mentions += ` <@&${FARM_SUPPORT_ROLE}>`;
             if (type === 'concern' && CONCERN_SUPPORT_ROLE) mentions += ` <@&${CONCERN_SUPPORT_ROLE}>`;
 
-            await ch.send({content: `${mentions}`, embeds:[embed], components:[btn]});
+            await ch.send({ content: `${mentions}`, embeds: [embed], components: [btn] });
             interaction.editReply(`Created your ticket: ${ch}`);
         } catch(e) { 
+            console.error('Ticket Creation Error:', e);
             interaction.editReply('❌ Error creating ticket channel.'); 
         }
         return;
