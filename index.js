@@ -69,67 +69,6 @@ function uwuify(text) {
   return text.replace(/(?:r|l)/g, 'w').replace(/(?:R|L)/g, 'W').replace(/n([aeiou])/g, 'ny$1').replace(/N([aeiou])/g, 'Ny$1').replace(/N([AEIOU])/g, 'Ny$1').replace(/ove/g, 'uv').replace(/!+/g, ' ' + faces[Math.floor(Math.random() * faces.length)] + ' ');
 }
 
-// --- HELPER: AQW CHARACTER SCRAPER ---
-async function fetchAQWCharacter(ign) {
-  try {
-    const formattedIgn = ign.trim().replace(/\s+/g, '+');
-    const response = await fetch(`https://account.aq.com/CharPage?id=${encodeURIComponent(formattedIgn)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5'
-      }
-    });
-
-    if (!response.ok) return null;
-    const html = await response.text();
-
-    // Check for Cloudflare blocks or missing character indicators
-    if (
-      html.includes("Just a moment...") || 
-      html.includes("Enable JavaScript and cookies to continue")
-    ) {
-      console.error("AQW Fetch blocked by Cloudflare anti-bot protection.");
-      return null;
-    }
-
-    if (
-      html.includes("Character Not Found") || 
-      html.includes("Page Not Found") || 
-      html.includes("no character found") ||
-      html.includes("Character Search")
-    ) {
-      return null;
-    }
-
-    // Extract Character ID
-    const ccidMatch = html.match(/var\s+ccid\s*=\s*(\d+);/i) || html.match(/ccid\s*[:=]\s*["']?(\d+)["']?/i);
-    const charId = ccidMatch ? ccidMatch[1] : 'Unknown';
-
-    // Extract Guild
-    const guildMatch = 
-      html.match(/Guild:<\/span>\s*<a[^>]*>(.*?)<\/a>/i) || 
-      html.match(/Guild:<\/b>\s*([^\n<]+)/i) || 
-      html.match(/Guild:<\/td>\s*<td[^>]*>(.*?)<\/td>/i) ||
-      html.match(/strGuild\s*=\s*["']([^"']+)["']/i);
-      
-    const guild = guildMatch ? guildMatch[1].replace(/<[^>]*>/g, '').trim() : 'None';
-
-    // Extract exact username case
-    const nameMatch = 
-      html.match(/<h2[^>]*>(.*?)<\/h2>/i) || 
-      html.match(/<h1[^>]*>(.*?)<\/h1>/i) ||
-      html.match(/<title>(.*?)\s*-\s*Character\s*Page<\/title>/i);
-      
-    const exactName = nameMatch ? nameMatch[1].replace(/<[^>]*>/g, '').trim() : ign;
-
-    return { charId, guild, exactName };
-  } catch (err) {
-    console.error('AQW Fetch Error:', err);
-    return null;
-  }
-}
-
 // --- SLASH COMMAND DEFINITIONS ---
 const commands = [
   { name: 'ping', description: 'Check bot latency' }, 
@@ -225,7 +164,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('hey you', { type: ActivityType.Listening });
+  client.user.setActivity('ishma', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -366,7 +305,7 @@ client.on('messageCreate', async message => {
 client.on('interactionCreate', async interaction => {
   if (!interaction.guild || interaction.guild.id !== GUILD_ID) return;
 
-  // BUTTON CLICK HANDLER (TICKETS & REACTION ROLES & VERIFICATION)
+  // BUTTON CLICK HANDLER
   if (interaction.isButton()) {
     // 1. REACTION ROLE BUTTON HANDLER
     if (interaction.customId.startsWith('rr_')) {
@@ -414,7 +353,63 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
     }
 
-    // 3. TICKET OPEN BUTTON HANDLER
+    // 3. ADMIN APPROVE VERIFICATION BUTTON
+    if (interaction.customId.startsWith('v_approve_')) {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: '❌ Only staff/admins can approve verification requests.', ephemeral: true });
+        }
+        await interaction.deferReply({ ephemeral: true });
+
+        const parts = interaction.customId.split('_');
+        const userId = parts[2];
+        const ign = parts[3];
+
+        const config = guildSettings.get(interaction.guild.id) || {};
+        const targetMember = await interaction.guild.members.fetch(userId).catch(() => null);
+
+        if (targetMember) {
+            if (config.verifyRoleId) {
+                await targetMember.roles.add(config.verifyRoleId).catch(() => {});
+            }
+            await targetMember.setNickname(ign).catch(() => {});
+            await interaction.editReply(`✅ Approved verification for ${targetMember.user.tag} (${ign})!`);
+            
+            // Disable buttons on log message
+            const disabledRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('done_app').setLabel(`Approved by ${interaction.user.username}`).setStyle(ButtonStyle.Success).setDisabled(true)
+            );
+            await interaction.message.edit({ components: [disabledRow] });
+        } else {
+            interaction.editReply('❌ User is no longer in this server.');
+        }
+        return;
+    }
+
+    // 4. ADMIN REJECT VERIFICATION BUTTON
+    if (interaction.customId.startsWith('v_reject_')) {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: '❌ Only staff/admins can reject verification requests.', ephemeral: true });
+        }
+        await interaction.deferReply({ ephemeral: true });
+
+        const userId = interaction.customId.split('_')[2];
+        const targetMember = await interaction.guild.members.fetch(userId).catch(() => null);
+
+        if (targetMember) {
+            await targetMember.setNickname(null).catch(() => {});
+            await interaction.editReply(`❌ Rejected verification for ${targetMember.user.tag}.`);
+            
+            const disabledRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('done_rej').setLabel(`Rejected by ${interaction.user.username}`).setStyle(ButtonStyle.Danger).setDisabled(true)
+            );
+            await interaction.message.edit({ components: [disabledRow] });
+        } else {
+            interaction.editReply('❌ User is no longer in this server.');
+        }
+        return;
+    }
+
+    // 5. TICKET OPEN BUTTON HANDLER
     if (['ticket_ultra', 'ticket_farm', 'ticket_concern'].includes(interaction.customId)) {
         const type = interaction.customId.replace('ticket_', '');
         const chName = `${type}-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -442,7 +437,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.showModal(modal);
     }
 
-    // 4. TICKET CLOSE BUTTON HANDLER
+    // 6. TICKET CLOSE BUTTON HANDLER
     if (interaction.customId === 'close_ticket') {
         await interaction.reply('🔒 Closing ticket...');
         setTimeout(() => interaction.channel.delete().catch(()=>{}), 3000);
@@ -493,34 +488,18 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // B. AQW VERIFICATION USER MODAL SUBMIT
+    // B. AQW VERIFICATION USER SUBMISSION
     if (interaction.customId === 'aqw_verify_modal') {
         await interaction.deferReply({ ephemeral: true });
 
         const ign = interaction.fields.getTextInputValue('aqw_name').trim();
         const inviterInput = interaction.fields.getTextInputValue('aqw_inviter')?.trim() || '';
 
-        // Search AQW Character Page
-        const charData = await fetchAQWCharacter(ign);
-
-        if (!charData) {
-            return interaction.editReply(`❌ Could not find AQW Character **"${ign}"**. Please check spelling!`);
-        }
-
         const config = guildSettings.get(interaction.guild.id) || {};
         
-        // Give verified role to member
-        if (config.verifyRoleId) {
-            try {
-                await interaction.member.roles.add(config.verifyRoleId);
-            } catch (e) {
-                console.error("Failed to add verified role:", e);
-            }
-        }
-
-        // Change member nickname to match their exact IGN
+        // Immediately rename user nickname to their IGN
         try {
-            await interaction.member.setNickname(charData.exactName);
+            await interaction.member.setNickname(ign);
         } catch (e) {
             console.log("Could not change nickname (user may be owner or higher role than bot).");
         }
@@ -546,17 +525,32 @@ client.on('interactionCreate', async interaction => {
         const timestampUnix = Math.floor(now.getTime() / 1000);
         const isoString = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
 
-        const logMessage = `Verified User:\n${interaction.user}\nCharacter ID:\n${charData.charId}\nAQW Username:\n${charData.exactName}\nGuild:\n${charData.guild}\nRole Added:\n${logRoleText}\nGuild Affiliation Role:\nNone\nInvited By:\n${inviterText}\n${isoString}•<t:${timestampUnix}:R>`;
+        const charPageUrl = `https://account.aq.com/CharPage?id=${encodeURIComponent(ign)}`;
+
+        const logMessage = `Verification Submission Received:\nUser: ${interaction.user}\nAQW Username: [${ign}](${charPageUrl})\nRole Target: ${logRoleText}\nInvited By: ${inviterText}\nSubmitted: ${isoString} • <t:${timestampUnix}:R>`;
+
+        const adminActionRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`v_approve_${interaction.user.id}_${ign}`)
+                .setLabel('Approve Verification')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('✅'),
+            new ButtonBuilder()
+                .setCustomId(`v_reject_${interaction.user.id}`)
+                .setLabel('Reject')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('✖️')
+        );
 
         // Send to Log Channel
         if (config.verifyLogChannelId) {
             const logCh = interaction.guild.channels.cache.get(config.verifyLogChannelId);
             if (logCh) {
-                await logCh.send({ content: logMessage });
+                await logCh.send({ content: logMessage, components: [adminActionRow] });
             }
         }
 
-        return interaction.editReply(`✅ Verified successfully as **${charData.exactName}**! Your nickname has been updated.`);
+        return interaction.editReply(`✅ Verification request submitted for **${ign}**! Your nickname has been updated and sent to staff for instant role approval.`);
     }
 
     // C. TICKET SETUP MODAL
