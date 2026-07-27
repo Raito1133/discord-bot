@@ -69,71 +69,6 @@ function uwuify(text) {
   return text.replace(/(?:r|l)/g, 'w').replace(/(?:R|L)/g, 'W').replace(/n([aeiou])/g, 'ny$1').replace(/N([aeiou])/g, 'Ny$1').replace(/N([AEIOU])/g, 'Ny$1').replace(/ove/g, 'uv').replace(/!+/g, ' ' + faces[Math.floor(Math.random() * faces.length)] + ' ');
 }
 
-// --- HELPER: AUTOMATIC AQW CHARACTER & GUILD SCRAPER ---
-async function fetchAQWCharacter(ign) {
-  const formattedIgn = ign.trim().replace(/\s+/g, '+');
-  const targetUrl = `https://account.aq.com/CharPage?id=${encodeURIComponent(formattedIgn)}`;
-
-  const fetchEndpoints = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-    targetUrl
-  ];
-
-  for (const url of fetchEndpoints) {
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-        }
-      });
-
-      if (!response.ok) continue;
-      const html = await response.text();
-
-      if (
-        html.includes("Just a moment...") || 
-        html.includes("cf-challenge") ||
-        html.includes("Character Not Found")
-      ) {
-        continue;
-      }
-
-      // Extract Character ID
-      const ccidMatch = html.match(/var\s+ccid\s*=\s*(\d+);/i) || html.match(/ccid\s*[:=]\s*["']?(\d+)["']?/i);
-      const charId = ccidMatch ? ccidMatch[1] : 'Unknown';
-
-      // Extract Guild automatically from HTML
-      const guildMatch = 
-        html.match(/Guild:<\/span>\s*<a[^>]*>(.*?)<\/a>/i) || 
-        html.match(/Guild:<\/b>\s*([^\n<]+)/i) || 
-        html.match(/Guild:<\/td>\s*<td[^>]*>(.*?)<\/td>/i) ||
-        html.match(/strGuild\s*=\s*["']([^"']+)["']/i) ||
-        html.match(/Guild:\s*<\/strong>\s*([^\n<]+)/i);
-
-      let guild = 'None';
-      if (guildMatch && guildMatch[1]) {
-        guild = guildMatch[1].replace(/<[^>]*>/g, '').trim();
-        if (!guild || guild.toLowerCase() === 'none') guild = 'None';
-      }
-
-      // Extract exact username capitalization
-      const nameMatch = 
-        html.match(/<h2[^>]*>(.*?)<\/h2>/i) || 
-        html.match(/<h1[^>]*>(.*?)<\/h1>/i) ||
-        html.match(/<title>(.*?)\s*-\s*Character\s*Page<\/title>/i);
-      const exactName = nameMatch ? nameMatch[1].replace(/<[^>]*>/g, '').trim() : ign;
-
-      return { charId, guild, exactName };
-    } catch (err) {
-      console.error(`Scraper endpoint failed for ${url}:`, err.message);
-    }
-  }
-
-  // Fallback if scraping gets temporary blocked
-  return { charId: 'Unknown', guild: 'None', exactName: ign };
-}
-
 // --- SLASH COMMAND DEFINITIONS ---
 const commands = [
   { name: 'ping', description: 'Check bot latency' }, 
@@ -229,7 +164,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('hey you', { type: ActivityType.Listening });
+  client.user.setActivity('syntry send dih', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -394,7 +329,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // 2. AQW VERIFY BUTTON HANDLER (FORM DOES NOT ASK FOR GUILD)
+    // 2. AQW VERIFY BUTTON HANDLER (MODAL WITH GUILD FIELD)
     if (interaction.customId === 'start_verification') {
         const modal = new ModalBuilder().setCustomId('aqw_verify_modal').setTitle('AQW Verification');
         modal.addComponents(
@@ -404,6 +339,14 @@ client.on('interactionCreate', async interaction => {
                     .setLabel('AQW Username')
                     .setStyle(TextInputStyle.Short)
                     .setPlaceholder('Enter your exact in-game character name')
+                    .setRequired(true)
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('aqw_guild')
+                    .setLabel('Guild Name')
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('Enter your AQW Guild name (or None)')
                     .setRequired(true)
             ),
             new ActionRowBuilder().addComponents(
@@ -562,28 +505,22 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // B. AQW VERIFICATION USER SUBMISSION (AUTOMATIC GUILD SCRAPING)
+    // B. AQW VERIFICATION USER SUBMISSION
     if (interaction.customId === 'aqw_verify_modal') {
         await interaction.deferReply({ ephemeral: true });
 
-        const rawIgn = interaction.fields.getTextInputValue('aqw_name').trim();
+        const ign = interaction.fields.getTextInputValue('aqw_name').trim();
+        const guildInput = interaction.fields.getTextInputValue('aqw_guild')?.trim() || 'None';
         const inviterInput = interaction.fields.getTextInputValue('aqw_inviter')?.trim() || '';
-
-        // Automatically scrape AQW Character Page for Guild & ID
-        const charData = await fetchAQWCharacter(rawIgn);
-        const ign = charData.exactName || rawIgn;
-        const guildScraped = charData.guild || 'None';
 
         const config = guildSettings.get(interaction.guild.id) || {};
         
-        // Change member nickname to exact IGN
         try {
             await interaction.member.setNickname(ign);
         } catch (e) {
-            console.log("Could not change nickname (user may be owner or higher role than bot).");
+            console.log("Could not change nickname.");
         }
 
-        // Build Inviter text line
         let inviterText = 'None';
         if (inviterInput) {
             const foundInviter = interaction.guild.members.cache.find(m => 
@@ -601,7 +538,6 @@ client.on('interactionCreate', async interaction => {
         const logRoleText = config.verifyRoleId ? `<@&${config.verifyRoleId}>` : '@unknown-role';
         const charPageUrl = `https://account.aq.com/CharPage?id=${encodeURIComponent(ign)}`;
 
-        // Verification Request Embed (Displays automatically read Guild)
         const logEmbed = new EmbedBuilder()
             .setTitle('📋 New Verification Request')
             .setColor(0xFFA500)
@@ -609,7 +545,7 @@ client.on('interactionCreate', async interaction => {
             .addFields(
                 { name: 'User', value: `${interaction.user}`, inline: true },
                 { name: 'AQW Username', value: `[${ign}](${charPageUrl})`, inline: true },
-                { name: 'Guild', value: guildScraped, inline: true },
+                { name: 'Guild', value: guildInput, inline: true },
                 { name: 'Role To Give', value: logRoleText, inline: true },
                 { name: 'Invited By', value: inviterText, inline: true }
             )
