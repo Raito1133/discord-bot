@@ -69,18 +69,36 @@ function uwuify(text) {
   return text.replace(/(?:r|l)/g, 'w').replace(/(?:R|L)/g, 'W').replace(/n([aeiou])/g, 'ny$1').replace(/N([aeiou])/g, 'Ny$1').replace(/N([AEIOU])/g, 'Ny$1').replace(/ove/g, 'uv').replace(/!+/g, ' ' + faces[Math.floor(Math.random() * faces.length)] + ' ');
 }
 
-// --- HELPER: AQW CHARACTER SCRAPER (FIXED WITH HEADERS) ---
+// --- HELPER: AQW CHARACTER SCRAPER ---
 async function fetchAQWCharacter(ign) {
   try {
-    const response = await fetch(`https://account.aq.com/CharPage?id=${encodeURIComponent(ign)}`, {
+    const formattedIgn = ign.trim().replace(/\s+/g, '+');
+    const response = await fetch(`https://account.aq.com/CharPage?id=${encodeURIComponent(formattedIgn)}`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
       }
     });
+
     if (!response.ok) return null;
     const html = await response.text();
 
-    if (html.includes("Character Not Found") || html.includes("Page Not Found") || html.includes("no character found")) {
+    // Check for Cloudflare blocks or missing character indicators
+    if (
+      html.includes("Just a moment...") || 
+      html.includes("Enable JavaScript and cookies to continue")
+    ) {
+      console.error("AQW Fetch blocked by Cloudflare anti-bot protection.");
+      return null;
+    }
+
+    if (
+      html.includes("Character Not Found") || 
+      html.includes("Page Not Found") || 
+      html.includes("no character found") ||
+      html.includes("Character Search")
+    ) {
       return null;
     }
 
@@ -89,11 +107,20 @@ async function fetchAQWCharacter(ign) {
     const charId = ccidMatch ? ccidMatch[1] : 'Unknown';
 
     // Extract Guild
-    const guildMatch = html.match(/Guild:<\/span>\s*<a[^>]*>(.*?)<\/a>/i) || html.match(/Guild:<\/b>\s*([^\n<]+)/i) || html.match(/Guild:<\/td>\s*<td[^>]*>(.*?)<\/td>/i);
+    const guildMatch = 
+      html.match(/Guild:<\/span>\s*<a[^>]*>(.*?)<\/a>/i) || 
+      html.match(/Guild:<\/b>\s*([^\n<]+)/i) || 
+      html.match(/Guild:<\/td>\s*<td[^>]*>(.*?)<\/td>/i) ||
+      html.match(/strGuild\s*=\s*["']([^"']+)["']/i);
+      
     const guild = guildMatch ? guildMatch[1].replace(/<[^>]*>/g, '').trim() : 'None';
 
     // Extract exact username case
-    const nameMatch = html.match(/<h2[^>]*>(.*?)<\/h2>/i) || html.match(/<h1[^>]*>(.*?)<\/h1>/i);
+    const nameMatch = 
+      html.match(/<h2[^>]*>(.*?)<\/h2>/i) || 
+      html.match(/<h1[^>]*>(.*?)<\/h1>/i) ||
+      html.match(/<title>(.*?)\s*-\s*Character\s*Page<\/title>/i);
+      
     const exactName = nameMatch ? nameMatch[1].replace(/<[^>]*>/g, '').trim() : ign;
 
     return { charId, guild, exactName };
@@ -198,7 +225,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('Avisala', { type: ActivityType.Listening });
+  client.user.setActivity('hey you', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -425,7 +452,48 @@ client.on('interactionCreate', async interaction => {
 
   // MODAL SUBMISSIONS
   if (interaction.isModalSubmit()) {
-    // AQW VERIFICATION MODAL SUBMIT
+    // A. VERIFICATION PANEL SETUP MODAL
+    if (interaction.customId.startsWith('verify_modal_')) {
+        await interaction.deferReply({ ephemeral: true });
+        
+        const parts = interaction.customId.split('_');
+        const channelId = parts[2];
+        const logChannelId = parts[3];
+        const roleId = parts[4];
+
+        const title = interaction.fields.getTextInputValue('verify_title');
+        const desc = interaction.fields.getTextInputValue('verify_desc');
+
+        const channel = interaction.guild.channels.cache.get(channelId);
+
+        const cfg = guildSettings.get(interaction.guildId) || {};
+        cfg.verifyLogChannelId = logChannelId;
+        cfg.verifyRoleId = roleId;
+        guildSettings.set(interaction.guildId, cfg);
+
+        const embed = new EmbedBuilder()
+            .setTitle(title)
+            .setDescription(desc)
+            .setColor(0x00FF00);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('start_verification')
+                .setLabel('Verify Account')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('✅')
+        );
+
+        if (channel) {
+            await channel.send({ embeds: [embed], components: [row] });
+            interaction.editReply(`Verification panel successfully posted to ${channel}!`);
+        } else {
+            interaction.editReply('❌ Could not find target channel.');
+        }
+        return;
+    }
+
+    // B. AQW VERIFICATION USER MODAL SUBMIT
     if (interaction.customId === 'aqw_verify_modal') {
         await interaction.deferReply({ ephemeral: true });
 
@@ -472,7 +540,7 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        // Build log message exactly as requested
+        // Build log message
         const logRoleText = config.verifyRoleId ? `<@&${config.verifyRoleId}>` : '@unknown-role';
         const now = new Date();
         const timestampUnix = Math.floor(now.getTime() / 1000);
@@ -491,7 +559,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply(`✅ Verified successfully as **${charData.exactName}**! Your nickname has been updated.`);
     }
 
-    // A. TICKET SETUP MODAL
+    // C. TICKET SETUP MODAL
     if (interaction.customId.startsWith('ts_modal_')) {
         await interaction.deferReply({ ephemeral: true });
         
@@ -527,7 +595,7 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // B. USER TICKET CREATION MODAL
+    // D. USER TICKET CREATION MODAL
     if (interaction.customId.startsWith('modal_')) {
         await interaction.deferReply({ ephemeral: true });
         const type = interaction.customId.replace('modal_', '');
@@ -536,16 +604,13 @@ client.on('interactionCreate', async interaction => {
         const config = guildSettings.get(interaction.guild.id) || {};
         
         try {
-            // --- CONFIGURE PERMISSIONS BASED ON TICKET TYPE ---
             let overwrites = [];
 
             if (type === 'ultra' || type === 'farm') {
-                // Everyone can view Ultra and Farm tickets
                 overwrites = [
                   { id: interaction.guild.id, allow: [PermissionsBitField.Flags.ViewChannel] }
                 ];
             } else if (type === 'concern') {
-                // Private: Hide from @everyone, allow only Creator, Concern Role, and Admins
                 overwrites = [
                   { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, 
                   { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel] }
@@ -559,7 +624,6 @@ client.on('interactionCreate', async interaction => {
                 }
             }
 
-            // Create the ticket channel
             const ch = await interaction.guild.channels.create({
                 name: chName, 
                 type: ChannelType.GuildText, 
@@ -593,7 +657,6 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒')
             );
             
-            // Build role mentions based on ticket type
             let mentions = `${interaction.user}`;
             if (type === 'ultra' && ULTRA_SUPPORT_ROLE) mentions += ` <@&${ULTRA_SUPPORT_ROLE}>`;
             if (type === 'farm' && FARM_SUPPORT_ROLE) mentions += ` <@&${FARM_SUPPORT_ROLE}>`;
@@ -620,26 +683,30 @@ client.on('interactionCreate', async interaction => {
         const logChannel = options.getChannel('log_channel');
         const verifiedRole = options.getRole('verified_role');
 
-        const cfg = guildSettings.get(interaction.guildId) || {};
-        cfg.verifyLogChannelId = logChannel.id;
-        cfg.verifyRoleId = verifiedRole.id;
-        guildSettings.set(interaction.guildId, cfg);
+        const modal = new ModalBuilder()
+            .setCustomId(`verify_modal_${channel.id}_${logChannel.id}_${verifiedRole.id}`)
+            .setTitle('Verification Panel Setup');
 
-        const embed = new EmbedBuilder()
-            .setTitle('AQW Account Verification')
-            .setDescription('Click the button below to verify your AQW account and get access to the server.')
-            .setColor(0x00FF00);
+        const titleInput = new TextInputBuilder()
+            .setCustomId('verify_title')
+            .setLabel('Panel Title')
+            .setStyle(TextInputStyle.Short)
+            .setValue('AQW Account Verification')
+            .setRequired(true);
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('start_verification')
-                .setLabel('Verify Account')
-                .setStyle(ButtonStyle.Success)
-                .setEmoji('✅')
+        const descInput = new TextInputBuilder()
+            .setCustomId('verify_desc')
+            .setLabel('Description (Shift + Enter supported!)')
+            .setStyle(TextInputStyle.Paragraph)
+            .setValue('Click the button below to verify your AQW account and get access to the server.')
+            .setRequired(true);
+
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(titleInput),
+            new ActionRowBuilder().addComponents(descInput)
         );
 
-        await channel.send({ embeds: [embed], components: [row] });
-        return await interaction.reply({ content: 'Verification panel successfully posted!', ephemeral: true });
+        return await interaction.showModal(modal);
     }
 
     if (commandName === 'ticketsetup') {
