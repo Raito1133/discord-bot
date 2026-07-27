@@ -69,6 +69,36 @@ function uwuify(text) {
   return text.replace(/(?:r|l)/g, 'w').replace(/(?:R|L)/g, 'W').replace(/n([aeiou])/g, 'ny$1').replace(/N([aeiou])/g, 'Ny$1').replace(/N([AEIOU])/g, 'Ny$1').replace(/ove/g, 'uv').replace(/!+/g, ' ' + faces[Math.floor(Math.random() * faces.length)] + ' ');
 }
 
+// --- HELPER: AQW CHARACTER SCRAPER ---
+async function fetchAQWCharacter(ign) {
+  try {
+    const response = await fetch(`https://account.aq.com/CharPage?id=${encodeURIComponent(ign)}`);
+    if (!response.ok) return null;
+    const html = await response.text();
+
+    if (html.includes("Character Not Found") || html.includes("Page Not Found")) {
+      return null;
+    }
+
+    // Extract Character ID
+    const ccidMatch = html.match(/var\s+ccid\s*=\s*(\d+);/i);
+    const charId = ccidMatch ? ccidMatch[1] : 'Unknown';
+
+    // Extract Guild
+    const guildMatch = html.match(/Guild:<\/span>\s*<a[^>]*>(.*?)<\/a>/i) || html.match(/Guild:<\/b>\s*([^\n<]+)/i);
+    const guild = guildMatch ? guildMatch[1].trim() : 'None';
+
+    // Extract exact username case
+    const nameMatch = html.match(/<h2[^>]*>(.*?)<\/h2>/i);
+    const exactName = nameMatch ? nameMatch[1].replace(/<[^>]*>/g, '').trim() : ign;
+
+    return { charId, guild, exactName };
+  } catch (err) {
+    console.error('AQW Fetch Error:', err);
+    return null;
+  }
+}
+
 // --- SLASH COMMAND DEFINITIONS ---
 const commands = [
   { name: 'ping', description: 'Check bot latency' }, 
@@ -126,6 +156,16 @@ const commands = [
     ], 
     default_member_permissions: '8' 
   },
+  { 
+    name: 'verify-setup', 
+    description: 'Setup the AQW Verification Panel', 
+    options: [
+      { name: 'channel', description: 'Where to post the verify button', type: 7, required: true },
+      { name: 'log_channel', description: 'Where verification logs will go', type: 7, required: true },
+      { name: 'verified_role', description: 'Role given after verification', type: 8, required: true }
+    ], 
+    default_member_permissions: '8' 
+  },
   { name: 'autoreact-setup', description: 'Auto-react setup', options: [{ name: 'emoji', description: 'Which emoji?', type: 3, required: true }, { name: 'role', description: 'Optional: Filter by this Role', type: 8, required: false }], default_member_permissions: '8' },
   { name: 'autorole-setup', description: 'Set auto role', options: [{ name: 'role', description: 'Role to give new members', type: 8, required: true }], default_member_permissions: '8' },
   { name: 'skullboard-setup', description: 'Skullboard setup', options: [{ name: 'channel', description: 'Where to log skulls', type: 7, required: true }], default_member_permissions: '8' },
@@ -154,7 +194,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('Sindria Guild', { type: ActivityType.Watching });
+  client.user.setActivity('To Krus', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -295,7 +335,7 @@ client.on('messageCreate', async message => {
 client.on('interactionCreate', async interaction => {
   if (!interaction.guild || interaction.guild.id !== GUILD_ID) return;
 
-  // BUTTON CLICK HANDLER (TICKETS & REACTION ROLES)
+  // BUTTON CLICK HANDLER (TICKETS & REACTION ROLES & VERIFICATION)
   if (interaction.isButton()) {
     // 1. REACTION ROLE BUTTON HANDLER
     if (interaction.customId.startsWith('rr_')) {
@@ -319,7 +359,31 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // 2. TICKET OPEN BUTTON HANDLER
+    // 2. AQW VERIFY BUTTON HANDLER
+    if (interaction.customId === 'start_verification') {
+        const modal = new ModalBuilder().setCustomId('aqw_verify_modal').setTitle('AQW Verification');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('aqw_name')
+                    .setLabel('AQW Username')
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('Enter your exact in-game character name')
+                    .setRequired(true)
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('aqw_inviter')
+                    .setLabel('Who invited you? (Optional)')
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('Username of person who invited you')
+                    .setRequired(false)
+            )
+        );
+        return await interaction.showModal(modal);
+    }
+
+    // 3. TICKET OPEN BUTTON HANDLER
     if (['ticket_ultra', 'ticket_farm', 'ticket_concern'].includes(interaction.customId)) {
         const type = interaction.customId.replace('ticket_', '');
         const chName = `${type}-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -329,14 +393,25 @@ client.on('interactionCreate', async interaction => {
         }
 
         const modal = new ModalBuilder().setCustomId(`modal_${type}`).setTitle(`Open ${type.toUpperCase()} Ticket`);
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_subject').setLabel('Reason').setStyle(TextInputStyle.Short).setRequired(true)),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_desc').setLabel('Description').setStyle(TextInputStyle.Paragraph).setRequired(true))
-        );
+
+        if (type === 'ultra' || type === 'farm') {
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_ign').setLabel('IGN').setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_server').setLabel('SERVER').setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_maproom').setLabel('MAP & ROOM NO.').setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_desc').setLabel('DESC').setStyle(TextInputStyle.Paragraph).setRequired(true))
+            );
+        } else { // Concern / Support
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_subject').setLabel('Subject').setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ticket_desc').setLabel('Description').setStyle(TextInputStyle.Paragraph).setRequired(true))
+            );
+        }
+
         await interaction.showModal(modal);
     }
 
-    // 3. TICKET CLOSE BUTTON HANDLER
+    // 4. TICKET CLOSE BUTTON HANDLER
     if (interaction.customId === 'close_ticket') {
         await interaction.reply('🔒 Closing ticket...');
         setTimeout(() => interaction.channel.delete().catch(()=>{}), 3000);
@@ -346,7 +421,66 @@ client.on('interactionCreate', async interaction => {
 
   // MODAL SUBMISSIONS
   if (interaction.isModalSubmit()) {
-    // A. TICKET SETUP MODAL (METHOD A: ALLOWS SHIFT + ENTER)
+    // AQW VERIFICATION MODAL SUBMIT
+    if (interaction.customId === 'aqw_verify_modal') {
+        await interaction.deferReply({ ephemeral: true });
+
+        const ign = interaction.fields.getTextInputValue('aqw_name').trim();
+        const inviterInput = interaction.fields.getTextInputValue('aqw_inviter')?.trim() || '';
+
+        // Search AQW Character Page
+        const charData = await fetchAQWCharacter(ign);
+
+        if (!charData) {
+            return interaction.editReply(`❌ Could not find AQW Character **"${ign}"**. Please check spelling!`);
+        }
+
+        const config = guildSettings.get(interaction.guild.id) || {};
+        
+        // Give verified role to member
+        if (config.verifyRoleId) {
+            try {
+                await interaction.member.roles.add(config.verifyRoleId);
+            } catch (e) {
+                console.error("Failed to add verified role:", e);
+            }
+        }
+
+        // Build Inviter text line
+        let inviterText = 'None';
+        if (inviterInput) {
+            const foundInviter = interaction.guild.members.cache.find(m => 
+                m.user.username.toLowerCase() === inviterInput.toLowerCase() || 
+                m.displayName.toLowerCase() === inviterInput.toLowerCase()
+            );
+
+            if (foundInviter) {
+                inviterText = `${foundInviter} invited me`;
+            } else {
+                inviterText = `${inviterInput} invited me  (not found)`;
+            }
+        }
+
+        // Build log message exactly as requested
+        const logRoleText = config.verifyRoleId ? `<@&${config.verifyRoleId}>` : '@unknown-role';
+        const now = new Date();
+        const timestampUnix = Math.floor(now.getTime() / 1000);
+        const isoString = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+
+        const logMessage = `Verified User:\n${interaction.user}\nCharacter ID:\n${charData.charId}\nAQW Username:\n${charData.exactName}\nGuild:\n${charData.guild}\nRole Added:\n${logRoleText}\nGuild Affiliation Role:\nNone\nInvited By:\n${inviterText}\n${isoString}•<t:${timestampUnix}:R>`;
+
+        // Send to Log Channel
+        if (config.verifyLogChannelId) {
+            const logCh = interaction.guild.channels.cache.get(config.verifyLogChannelId);
+            if (logCh) {
+                await logCh.send({ content: logMessage });
+            }
+        }
+
+        return interaction.editReply(`✅ Verified successfully as **${charData.exactName}**!`);
+    }
+
+    // A. TICKET SETUP MODAL
     if (interaction.customId.startsWith('ts_modal_')) {
         await interaction.deferReply({ ephemeral: true });
         
@@ -386,7 +520,6 @@ client.on('interactionCreate', async interaction => {
     if (interaction.customId.startsWith('modal_')) {
         await interaction.deferReply({ ephemeral: true });
         const type = interaction.customId.replace('modal_', '');
-        const subject = interaction.fields.getTextInputValue('ticket_subject');
         const desc = interaction.fields.getTextInputValue('ticket_desc');
         const chName = `${type}-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
         const config = guildSettings.get(interaction.guild.id) || {};
@@ -407,7 +540,6 @@ client.on('interactionCreate', async interaction => {
                   { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel] }
                 ];
 
-                // Add CONCERN_SUPPORT_ROLE permission if defined
                 if (CONCERN_SUPPORT_ROLE) {
                     overwrites.push({
                         id: CONCERN_SUPPORT_ROLE,
@@ -425,9 +557,26 @@ client.on('interactionCreate', async interaction => {
             });
 
             const embed = new EmbedBuilder()
-                .setTitle(`Ticket (${type.toUpperCase()}): ${subject}`)
-                .setDescription(`**User:** ${interaction.user}\n**Desc:** ${desc}`)
+                .setTitle(`Ticket (${type.toUpperCase()})`)
                 .setColor(0x0099FF);
+
+            if (type === 'ultra' || type === 'farm') {
+                const ign = interaction.fields.getTextInputValue('ticket_ign');
+                const server = interaction.fields.getTextInputValue('ticket_server');
+                const maproom = interaction.fields.getTextInputValue('ticket_maproom');
+
+                embed.setDescription(
+                    `**User:** ${interaction.user}\n` +
+                    `**IGN:** ${ign}\n` +
+                    `**SERVER:** ${server}\n` +
+                    `**MAP & ROOM NO.:** ${maproom}\n` +
+                    `**DESC:** ${desc}`
+                );
+            } else {
+                const subject = interaction.fields.getTextInputValue('ticket_subject');
+                embed.setTitle(`Ticket (${type.toUpperCase()}): ${subject}`);
+                embed.setDescription(`**User:** ${interaction.user}\n**Desc:** ${desc}`);
+            }
                 
             const btn = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒')
@@ -454,6 +603,33 @@ client.on('interactionCreate', async interaction => {
   // --- SLASH COMMAND HANDLERS ---
   try {
     const { commandName, options } = interaction;
+
+    if (commandName === 'verify-setup') {
+        const channel = options.getChannel('channel');
+        const logChannel = options.getChannel('log_channel');
+        const verifiedRole = options.getRole('verified_role');
+
+        const cfg = guildSettings.get(interaction.guildId) || {};
+        cfg.verifyLogChannelId = logChannel.id;
+        cfg.verifyRoleId = verifiedRole.id;
+        guildSettings.set(interaction.guildId, cfg);
+
+        const embed = new EmbedBuilder()
+            .setTitle('AQW Account Verification')
+            .setDescription('Click the button below to verify your AQW account and get access to the server.')
+            .setColor(0x00FF00);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('start_verification')
+                .setLabel('Verify Account')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('✅')
+        );
+
+        await channel.send({ embeds: [embed], components: [row] });
+        return await interaction.reply({ content: 'Verification panel successfully posted!', ephemeral: true });
+    }
 
     if (commandName === 'ticketsetup') {
         const channel = options.getChannel('channel');
@@ -563,7 +739,7 @@ client.on('interactionCreate', async interaction => {
             .addFields(
                 { name: 'Admin / Mod', value: '`ban`, `kick`, `mute`, `unmute`, `lock`, `unlock`, `purge`\n`deafen`, `undeafen`, `stick`, `unstick`\n`setprefix`, `talk`, `embed`, `uwulock`' },
                 { name: 'Public / Fun', value: '`ping`, `afk`, `snipe`, `userinfo`, `avatar`, `me`, `help`' },
-                { name: 'Setup (Slash Only)', value: '`/ticketsetup`, `/welcome-setup`, `/leave-setup`\n`/autorole-setup`, `/autoreact-setup`\n`/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
+                { name: 'Setup (Slash Only)', value: '`/ticketsetup`, `/verify-setup`, `/welcome-setup`, `/leave-setup`\n`/autorole-setup`, `/autoreact-setup`\n`/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
             );
         interaction.editReply({embeds:[embed]});
     }
