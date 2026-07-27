@@ -669,3 +669,11 @@ process.on('uncaughtException', (err, origin) => console.log('Anti-Crash: ', err
 // --- LOGIN ---
 console.log('Starting bot, trying to login...');
 client.login(process.env.DISCORD_TOKEN);
+
+const http = require('http');
+
+// Simple HTTP server to keep Render happy
+http.createServer((req, res) => {
+  res.write("Bot is alive!");
+  res.end();
+}).listen(process.env.PORT || 3000);
