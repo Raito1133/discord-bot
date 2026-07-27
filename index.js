@@ -69,27 +69,31 @@ function uwuify(text) {
   return text.replace(/(?:r|l)/g, 'w').replace(/(?:R|L)/g, 'W').replace(/n([aeiou])/g, 'ny$1').replace(/N([aeiou])/g, 'Ny$1').replace(/N([AEIOU])/g, 'Ny$1').replace(/ove/g, 'uv').replace(/!+/g, ' ' + faces[Math.floor(Math.random() * faces.length)] + ' ');
 }
 
-// --- HELPER: AQW CHARACTER SCRAPER ---
+// --- HELPER: AQW CHARACTER SCRAPER (FIXED WITH HEADERS) ---
 async function fetchAQWCharacter(ign) {
   try {
-    const response = await fetch(`https://account.aq.com/CharPage?id=${encodeURIComponent(ign)}`);
+    const response = await fetch(`https://account.aq.com/CharPage?id=${encodeURIComponent(ign)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
     if (!response.ok) return null;
     const html = await response.text();
 
-    if (html.includes("Character Not Found") || html.includes("Page Not Found")) {
+    if (html.includes("Character Not Found") || html.includes("Page Not Found") || html.includes("no character found")) {
       return null;
     }
 
     // Extract Character ID
-    const ccidMatch = html.match(/var\s+ccid\s*=\s*(\d+);/i);
+    const ccidMatch = html.match(/var\s+ccid\s*=\s*(\d+);/i) || html.match(/ccid\s*[:=]\s*["']?(\d+)["']?/i);
     const charId = ccidMatch ? ccidMatch[1] : 'Unknown';
 
     // Extract Guild
-    const guildMatch = html.match(/Guild:<\/span>\s*<a[^>]*>(.*?)<\/a>/i) || html.match(/Guild:<\/b>\s*([^\n<]+)/i);
-    const guild = guildMatch ? guildMatch[1].trim() : 'None';
+    const guildMatch = html.match(/Guild:<\/span>\s*<a[^>]*>(.*?)<\/a>/i) || html.match(/Guild:<\/b>\s*([^\n<]+)/i) || html.match(/Guild:<\/td>\s*<td[^>]*>(.*?)<\/td>/i);
+    const guild = guildMatch ? guildMatch[1].replace(/<[^>]*>/g, '').trim() : 'None';
 
     // Extract exact username case
-    const nameMatch = html.match(/<h2[^>]*>(.*?)<\/h2>/i);
+    const nameMatch = html.match(/<h2[^>]*>(.*?)<\/h2>/i) || html.match(/<h1[^>]*>(.*?)<\/h1>/i);
     const exactName = nameMatch ? nameMatch[1].replace(/<[^>]*>/g, '').trim() : ign;
 
     return { charId, guild, exactName };
@@ -194,7 +198,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('To Krus', { type: ActivityType.Listening });
+  client.user.setActivity('Avisala', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -446,6 +450,13 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
+        // Change member nickname to match their exact IGN
+        try {
+            await interaction.member.setNickname(charData.exactName);
+        } catch (e) {
+            console.log("Could not change nickname (user may be owner or higher role than bot).");
+        }
+
         // Build Inviter text line
         let inviterText = 'None';
         if (inviterInput) {
@@ -477,7 +488,7 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        return interaction.editReply(`✅ Verified successfully as **${charData.exactName}**!`);
+        return interaction.editReply(`✅ Verified successfully as **${charData.exactName}**! Your nickname has been updated.`);
     }
 
     // A. TICKET SETUP MODAL
