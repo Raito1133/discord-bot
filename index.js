@@ -165,7 +165,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('Pls buff Vezeryl', { type: ActivityType.Listening });
+  client.user.setActivity('Pls buff me', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -338,6 +338,7 @@ client.on('interactionCreate', async interaction => {
           .setCustomId(`aqw_verify_modal_${verifyType}`)
           .setTitle(`AQW ${verifyType.toUpperCase()} Verification`);
 
+        // Always ask for AQW Name
         modal.addComponents(
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
@@ -346,15 +347,25 @@ client.on('interactionCreate', async interaction => {
                     .setStyle(TextInputStyle.Short)
                     .setPlaceholder('Enter your exact in-game character name')
                     .setRequired(true)
-            ),
-            new ActionRowBuilder().addComponents(
-                new TextInputBuilder()
-                    .setCustomId('aqw_guild')
-                    .setLabel('Guild Name')
-                    .setStyle(TextInputStyle.Short)
-                    .setPlaceholder('Enter your AQW Guild name (or None)')
-                    .setRequired(true)
-            ),
+            )
+        );
+
+        // ONLY ask for Guild Name if verifying as GUEST
+        if (verifyType === 'guest') {
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('aqw_guild')
+                        .setLabel('Guild Name')
+                        .setStyle(TextInputStyle.Short)
+                        .setPlaceholder('Enter your AQW Guild name (or None)')
+                        .setRequired(true)
+                )
+            );
+        }
+
+        // Optional Inviter field
+        modal.addComponents(
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
                     .setCustomId('aqw_inviter')
@@ -364,6 +375,7 @@ client.on('interactionCreate', async interaction => {
                     .setRequired(false)
             )
         );
+
         return await interaction.showModal(modal);
     }
 
@@ -377,7 +389,7 @@ client.on('interactionCreate', async interaction => {
         const parts = interaction.customId.split('_');
         const userId = parts[2];
         const verifyType = parts[3]; // 'guest' or 'member'
-        const ign = parts.slice(4).join('_'); // recombine in case IGN had underscores
+        const ign = parts.slice(4).join('_'); 
 
         const config = guildSettings.get(interaction.guild.id) || {};
         const targetMember = await interaction.guild.members.fetch(userId).catch(() => null);
@@ -498,13 +510,11 @@ client.on('interactionCreate', async interaction => {
             new ButtonBuilder()
                 .setCustomId('verify_type_guest')
                 .setLabel('Verify Guest')
-                .setStyle(ButtonStyle.Secondary)
-                .setEmoji('👤'),
+                .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
                 .setCustomId('verify_type_member')
                 .setLabel('Verify Member')
                 .setStyle(ButtonStyle.Success)
-                .setEmoji('⚔️')
         );
 
         if (channel) {
@@ -522,7 +532,13 @@ client.on('interactionCreate', async interaction => {
 
         const verifyType = interaction.customId.replace('aqw_verify_modal_', ''); // 'guest' or 'member'
         const ign = interaction.fields.getTextInputValue('aqw_name').trim();
-        const guildInput = interaction.fields.getTextInputValue('aqw_guild')?.trim() || 'None';
+        
+        // Handle Guild Name: Automatic 'Sindria' for Members, User Input for Guests
+        let guildInput = 'Sindria';
+        if (verifyType === 'guest') {
+            guildInput = interaction.fields.getTextInputValue('aqw_guild')?.trim() || 'None';
+        }
+
         const inviterInput = interaction.fields.getTextInputValue('aqw_inviter')?.trim() || '';
 
         const config = guildSettings.get(interaction.guild.id) || {};
@@ -569,13 +585,11 @@ client.on('interactionCreate', async interaction => {
             new ButtonBuilder()
                 .setCustomId(`v_approve_${interaction.user.id}_${verifyType}_${ign}`)
                 .setLabel('Approve Verification')
-                .setStyle(ButtonStyle.Success)
-                .setEmoji('✅'),
+                .setStyle(ButtonStyle.Success),
             new ButtonBuilder()
                 .setCustomId(`v_reject_${interaction.user.id}`)
                 .setLabel('Reject')
                 .setStyle(ButtonStyle.Danger)
-                .setEmoji('✖️')
         );
 
         if (config.verifyLogChannelId) {
@@ -599,13 +613,12 @@ client.on('interactionCreate', async interaction => {
 
         const targetMember = await interaction.guild.members.fetch(userId).catch(() => null);
 
-        // Try to DM the user with the rejection reason
         let dmSent = false;
         if (targetMember) {
             await targetMember.setNickname(null).catch(() => {});
 
             const rejectEmbed = new EmbedBuilder()
-                .setTitle('❌ Verification Request Rejected')
+                .setTitle('Verification Request Rejected')
                 .setColor(0xFF0000)
                 .setDescription(`Your verification request for **${interaction.guild.name}** was rejected.\n\n**Reason:** ${reason}`)
                 .setFooter({ text: 'Please contact staff or re-apply if you believe this was a mistake.' })
@@ -615,7 +628,7 @@ client.on('interactionCreate', async interaction => {
                 await targetMember.send({ embeds: [rejectEmbed] });
                 dmSent = true;
             } catch (dmErr) {
-                console.log(`Could not send DM to ${targetMember.user.tag}. (DMs might be disabled)`);
+                console.log(`Could not send DM to ${targetMember.user.tag}. (DMs disabled by user)`);
             }
         }
 
@@ -645,7 +658,11 @@ client.on('interactionCreate', async interaction => {
             console.error('Error updating log message:', e);
         }
 
-        return interaction.editReply(`❌ Rejected verification request.${dmSent ? ' PM sent to user.' : ' (User DMs were disabled, PM could not be sent.)'}`);
+        const responseMsg = dmSent 
+            ? 'Verification rejected and user was notified via Direct Message.'
+            : 'Verification rejected. (User has DMs closed so DM could not be delivered).';
+
+        return interaction.editReply(responseMsg);
     }
 
     // D. TICKET SETUP MODAL
@@ -670,9 +687,9 @@ client.on('interactionCreate', async interaction => {
         const embed = new EmbedBuilder().setTitle(title).setDescription(desc).setColor(0x2F3136);
 
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('ticket_ultra').setLabel('Ultra Help').setStyle(ButtonStyle.Danger).setEmoji('⚔️'),
-          new ButtonBuilder().setCustomId('ticket_farm').setLabel('Farm Help').setStyle(ButtonStyle.Success).setEmoji('👾'),
-          new ButtonBuilder().setCustomId('ticket_concern').setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('🎟️')
+          new ButtonBuilder().setCustomId('ticket_ultra').setLabel('Ultra Help').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId('ticket_farm').setLabel('Farm Help').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('ticket_concern').setLabel('Support').setStyle(ButtonStyle.Primary)
         );
 
         if (channel) {
@@ -743,7 +760,7 @@ client.on('interactionCreate', async interaction => {
             }
                 
             const btn = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+                new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger)
             );
             
             let mentions = `${interaction.user}`;
