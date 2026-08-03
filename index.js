@@ -128,11 +128,12 @@ const commands = [
   },
   { 
     name: 'verify-setup', 
-    description: 'Setup the AQW Verification Panel', 
+    description: 'Setup the AQW Verification Panel with Guest and Guild roles', 
     options: [
-      { name: 'channel', description: 'Where to post the verify button', type: 7, required: true },
+      { name: 'channel', description: 'Where to post the verify buttons', type: 7, required: true },
       { name: 'log_channel', description: 'Where verification logs will go', type: 7, required: true },
-      { name: 'verified_role', description: 'Role given after verification', type: 8, required: true }
+      { name: 'guest_role', description: 'Role given to verified Guests', type: 8, required: true },
+      { name: 'member_role', description: 'Role given to verified Guild Members', type: 8, required: true }
     ], 
     default_member_permissions: '8' 
   },
@@ -164,7 +165,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('syntry send dih', { type: ActivityType.Listening });
+  client.user.setActivity('Pls buff Vezeryl', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -329,9 +330,14 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // 2. AQW VERIFY BUTTON HANDLER (MODAL WITH GUILD FIELD)
-    if (interaction.customId === 'start_verification') {
-        const modal = new ModalBuilder().setCustomId('aqw_verify_modal').setTitle('AQW Verification');
+    // 2. AQW VERIFY BUTTON HANDLER (GUEST / MEMBER SELECTION)
+    if (interaction.customId.startsWith('verify_type_')) {
+        const verifyType = interaction.customId.replace('verify_type_', ''); // 'guest' or 'member'
+
+        const modal = new ModalBuilder()
+          .setCustomId(`aqw_verify_modal_${verifyType}`)
+          .setTitle(`AQW ${verifyType.toUpperCase()} Verification`);
+
         modal.addComponents(
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
@@ -370,17 +376,20 @@ client.on('interactionCreate', async interaction => {
 
         const parts = interaction.customId.split('_');
         const userId = parts[2];
-        const ign = parts[3];
+        const verifyType = parts[3]; // 'guest' or 'member'
+        const ign = parts.slice(4).join('_'); // recombine in case IGN had underscores
 
         const config = guildSettings.get(interaction.guild.id) || {};
         const targetMember = await interaction.guild.members.fetch(userId).catch(() => null);
 
         if (targetMember) {
-            if (config.verifyRoleId) {
-                await targetMember.roles.add(config.verifyRoleId).catch(() => {});
+            const roleToGive = verifyType === 'guest' ? config.verifyGuestRoleId : config.verifyMemberRoleId;
+
+            if (roleToGive) {
+                await targetMember.roles.add(roleToGive).catch(() => {});
             }
             await targetMember.setNickname(ign).catch(() => {});
-            await interaction.editReply(`✅ Approved verification for ${targetMember.user.tag} (${ign})!`);
+            await interaction.editReply(`✅ Approved ${verifyType.toUpperCase()} verification for ${targetMember.user.tag} (${ign})!`);
             
             const oldEmbed = interaction.message.embeds[0];
             const updatedEmbed = EmbedBuilder.from(oldEmbed)
@@ -397,33 +406,28 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // 4. ADMIN REJECT VERIFICATION BUTTON
+    // 4. ADMIN REJECT VERIFICATION BUTTON (SHOW MODAL FOR REASON)
     if (interaction.customId.startsWith('v_reject_')) {
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
             return interaction.reply({ content: '❌ Only staff/admins can reject verification requests.', ephemeral: true });
         }
-        await interaction.deferReply({ ephemeral: true });
 
         const userId = interaction.customId.split('_')[2];
-        const targetMember = await interaction.guild.members.fetch(userId).catch(() => null);
+        const messageId = interaction.message.id;
 
-        if (targetMember) {
-            await targetMember.setNickname(null).catch(() => {});
-            await interaction.editReply(`❌ Rejected verification for ${targetMember.user.tag}.`);
-            
-            const oldEmbed = interaction.message.embeds[0];
-            const updatedEmbed = EmbedBuilder.from(oldEmbed)
-                .setColor(0xFF0000)
-                .setFooter({ text: `Rejected by ${interaction.user.tag}` });
+        const modal = new ModalBuilder()
+            .setCustomId(`v_reject_modal_${userId}_${messageId}`)
+            .setTitle('Reject Verification Request');
 
-            const disabledRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('done_rej').setLabel(`Rejected by ${interaction.user.username}`).setStyle(ButtonStyle.Danger).setDisabled(true)
-            );
-            await interaction.message.edit({ embeds: [updatedEmbed], components: [disabledRow] });
-        } else {
-            interaction.editReply('❌ User is no longer in this server.');
-        }
-        return;
+        const reasonInput = new TextInputBuilder()
+            .setCustomId('reject_reason')
+            .setLabel('Reason for Rejection')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Enter the reason why this verification was rejected...')
+            .setRequired(true);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
+        return await interaction.showModal(modal);
     }
 
     // 5. TICKET OPEN BUTTON HANDLER
@@ -471,7 +475,8 @@ client.on('interactionCreate', async interaction => {
         const parts = interaction.customId.split('_');
         const channelId = parts[2];
         const logChannelId = parts[3];
-        const roleId = parts[4];
+        const guestRoleId = parts[4];
+        const memberRoleId = parts[5];
 
         const title = interaction.fields.getTextInputValue('verify_title');
         const desc = interaction.fields.getTextInputValue('verify_desc');
@@ -480,7 +485,8 @@ client.on('interactionCreate', async interaction => {
 
         const cfg = guildSettings.get(interaction.guildId) || {};
         cfg.verifyLogChannelId = logChannelId;
-        cfg.verifyRoleId = roleId;
+        cfg.verifyGuestRoleId = guestRoleId;
+        cfg.verifyMemberRoleId = memberRoleId;
         guildSettings.set(interaction.guildId, cfg);
 
         const embed = new EmbedBuilder()
@@ -490,10 +496,15 @@ client.on('interactionCreate', async interaction => {
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId('start_verification')
-                .setLabel('Verify Account')
+                .setCustomId('verify_type_guest')
+                .setLabel('Verify Guest')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('👤'),
+            new ButtonBuilder()
+                .setCustomId('verify_type_member')
+                .setLabel('Verify Member')
                 .setStyle(ButtonStyle.Success)
-                .setEmoji('✅')
+                .setEmoji('⚔️')
         );
 
         if (channel) {
@@ -506,9 +517,10 @@ client.on('interactionCreate', async interaction => {
     }
 
     // B. AQW VERIFICATION USER SUBMISSION
-    if (interaction.customId === 'aqw_verify_modal') {
+    if (interaction.customId.startsWith('aqw_verify_modal_')) {
         await interaction.deferReply({ ephemeral: true });
 
+        const verifyType = interaction.customId.replace('aqw_verify_modal_', ''); // 'guest' or 'member'
         const ign = interaction.fields.getTextInputValue('aqw_name').trim();
         const guildInput = interaction.fields.getTextInputValue('aqw_guild')?.trim() || 'None';
         const inviterInput = interaction.fields.getTextInputValue('aqw_inviter')?.trim() || '';
@@ -535,16 +547,18 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        const logRoleText = config.verifyRoleId ? `<@&${config.verifyRoleId}>` : '@unknown-role';
+        const roleId = verifyType === 'guest' ? config.verifyGuestRoleId : config.verifyMemberRoleId;
+        const logRoleText = roleId ? `<@&${roleId}>` : '@unknown-role';
         const charPageUrl = `https://account.aq.com/CharPage?id=${encodeURIComponent(ign)}`;
 
         const logEmbed = new EmbedBuilder()
-            .setTitle('📋 New Verification Request')
-            .setColor(0xFFA500)
+            .setTitle(`📋 New ${verifyType.toUpperCase()} Verification Request`)
+            .setColor(verifyType === 'guest' ? 0x3498DB : 0xFFA500)
             .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
             .addFields(
                 { name: 'User', value: `${interaction.user}`, inline: true },
                 { name: 'AQW Username', value: `[${ign}](${charPageUrl})`, inline: true },
+                { name: 'Verification Type', value: verifyType.toUpperCase(), inline: true },
                 { name: 'Guild', value: guildInput, inline: true },
                 { name: 'Role To Give', value: logRoleText, inline: true },
                 { name: 'Invited By', value: inviterText, inline: true }
@@ -553,7 +567,7 @@ client.on('interactionCreate', async interaction => {
 
         const adminActionRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`v_approve_${interaction.user.id}_${ign}`)
+                .setCustomId(`v_approve_${interaction.user.id}_${verifyType}_${ign}`)
                 .setLabel('Approve Verification')
                 .setStyle(ButtonStyle.Success)
                 .setEmoji('✅'),
@@ -571,10 +585,70 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        return interaction.editReply(`✅ Verification request submitted for **${ign}**! Your nickname has been updated and sent to staff for instant role approval.`);
+        return interaction.editReply(`✅ Verification request submitted as **${verifyType.toUpperCase()}** for **${ign}**! Your nickname has been updated and sent to staff for instant role approval.`);
     }
 
-    // C. TICKET SETUP MODAL
+    // C. ADMIN REJECTION SUBMISSION WITH PM (DM) TO USER
+    if (interaction.customId.startsWith('v_reject_modal_')) {
+        await interaction.deferReply({ ephemeral: true });
+
+        const parts = interaction.customId.split('_');
+        const userId = parts[3];
+        const logMsgId = parts[4];
+        const reason = interaction.fields.getTextInputValue('reject_reason');
+
+        const targetMember = await interaction.guild.members.fetch(userId).catch(() => null);
+
+        // Try to DM the user with the rejection reason
+        let dmSent = false;
+        if (targetMember) {
+            await targetMember.setNickname(null).catch(() => {});
+
+            const rejectEmbed = new EmbedBuilder()
+                .setTitle('❌ Verification Request Rejected')
+                .setColor(0xFF0000)
+                .setDescription(`Your verification request for **${interaction.guild.name}** was rejected.\n\n**Reason:** ${reason}`)
+                .setFooter({ text: 'Please contact staff or re-apply if you believe this was a mistake.' })
+                .setTimestamp();
+
+            try {
+                await targetMember.send({ embeds: [rejectEmbed] });
+                dmSent = true;
+            } catch (dmErr) {
+                console.log(`Could not send DM to ${targetMember.user.tag}. (DMs might be disabled)`);
+            }
+        }
+
+        // Update the log embed in the log channel
+        try {
+            const logChannel = interaction.channel;
+            const logMessage = await logChannel.messages.fetch(logMsgId).catch(() => null);
+
+            if (logMessage) {
+                const oldEmbed = logMessage.embeds[0];
+                const updatedEmbed = EmbedBuilder.from(oldEmbed)
+                    .setColor(0xFF0000)
+                    .addFields({ name: 'Rejection Reason', value: reason })
+                    .setFooter({ text: `Rejected by ${interaction.user.tag}` });
+
+                const disabledRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('done_rej')
+                        .setLabel(`Rejected by ${interaction.user.username}`)
+                        .setStyle(ButtonStyle.Danger)
+                        .setDisabled(true)
+                );
+
+                await logMessage.edit({ embeds: [updatedEmbed], components: [disabledRow] });
+            }
+        } catch (e) {
+            console.error('Error updating log message:', e);
+        }
+
+        return interaction.editReply(`❌ Rejected verification request.${dmSent ? ' PM sent to user.' : ' (User DMs were disabled, PM could not be sent.)'}`);
+    }
+
+    // D. TICKET SETUP MODAL
     if (interaction.customId.startsWith('ts_modal_')) {
         await interaction.deferReply({ ephemeral: true });
         
@@ -610,7 +684,7 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // D. USER TICKET CREATION MODAL
+    // E. USER TICKET CREATION MODAL
     if (interaction.customId.startsWith('modal_')) {
         await interaction.deferReply({ ephemeral: true });
         const type = interaction.customId.replace('modal_', '');
@@ -696,10 +770,11 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'verify-setup') {
         const channel = options.getChannel('channel');
         const logChannel = options.getChannel('log_channel');
-        const verifiedRole = options.getRole('verified_role');
+        const guestRole = options.getRole('guest_role');
+        const memberRole = options.getRole('member_role');
 
         const modal = new ModalBuilder()
-            .setCustomId(`verify_modal_${channel.id}_${logChannel.id}_${verifiedRole.id}`)
+            .setCustomId(`verify_modal_${channel.id}_${logChannel.id}_${guestRole.id}_${memberRole.id}`)
             .setTitle('Verification Panel Setup');
 
         const titleInput = new TextInputBuilder()
@@ -713,7 +788,7 @@ client.on('interactionCreate', async interaction => {
             .setCustomId('verify_desc')
             .setLabel('Description (Shift + Enter supported!)')
             .setStyle(TextInputStyle.Paragraph)
-            .setValue('Click the button below to verify your AQW account and get access to the server.')
+            .setValue('Click a button below to verify your AQW account and receive your role.')
             .setRequired(true);
 
         modal.addComponents(
