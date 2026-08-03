@@ -47,6 +47,7 @@ const snipes = new Map();
 const afkUsers = new Map();
 const uwuTargets = new Set();
 const stickyMessages = new Map();
+const rejectionReasons = new Map(); // Stores ephemeral rejection notices for users
 
 // --- HELPER: TIME PARSER ---
 function parseDuration(str) {
@@ -165,7 +166,7 @@ const commands = [
 // --- STARTUP ---
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('Pls buff me', { type: ActivityType.Listening });
+  client.user.setActivity('syntry send dih', { type: ActivityType.Listening });
   const rest = new REST().setToken(client.token);
   
   try {
@@ -334,6 +335,19 @@ client.on('interactionCreate', async interaction => {
     if (interaction.customId.startsWith('verify_type_')) {
         const verifyType = interaction.customId.replace('verify_type_', ''); // 'guest' or 'member'
 
+        // Check if user was previously rejected, and display an ephemeral notice first
+        if (rejectionReasons.has(interaction.user.id)) {
+            const previousReason = rejectionReasons.get(interaction.user.id);
+            rejectionReasons.delete(interaction.user.id); // Clear notice after viewing
+
+            const rejEmbed = new EmbedBuilder()
+                .setTitle('❌ Previous Verification Request Rejected')
+                .setColor(0xFF0000)
+                .setDescription(`Your previous request was rejected for the following reason:\n\n> **${previousReason}**\n\nPlease make sure to address this when re-submitting your request below.`);
+
+            await interaction.reply({ embeds: [rejEmbed], ephemeral: true });
+        }
+
         const modal = new ModalBuilder()
           .setCustomId(`aqw_verify_modal_${verifyType}`)
           .setTitle(`AQW ${verifyType.toUpperCase()} Verification`);
@@ -376,6 +390,11 @@ client.on('interactionCreate', async interaction => {
             )
         );
 
+        // If we already replied with the rejection notice, show Modal via followUp logic
+        if (interaction.replied) {
+            return; // User saw the notice and can click the button again to open modal
+        }
+
         return await interaction.showModal(modal);
     }
 
@@ -401,6 +420,7 @@ client.on('interactionCreate', async interaction => {
                 await targetMember.roles.add(roleToGive).catch(() => {});
             }
             await targetMember.setNickname(ign).catch(() => {});
+            rejectionReasons.delete(userId); // Clear any pending rejection notices
             await interaction.editReply(`✅ Approved ${verifyType.toUpperCase()} verification for ${targetMember.user.tag} (${ign})!`);
             
             const oldEmbed = interaction.message.embeds[0];
@@ -602,7 +622,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply(`✅ Verification request submitted as **${verifyType.toUpperCase()}** for **${ign}**! Your nickname has been updated and sent to staff for instant role approval.`);
     }
 
-    // C. ADMIN REJECTION SUBMISSION WITH PM (DM) TO USER
+    // C. ADMIN REJECTION SUBMISSION
     if (interaction.customId.startsWith('v_reject_modal_')) {
         await interaction.deferReply({ ephemeral: true });
 
@@ -613,26 +633,13 @@ client.on('interactionCreate', async interaction => {
 
         const targetMember = await interaction.guild.members.fetch(userId).catch(() => null);
 
-        let dmSent = false;
         if (targetMember) {
             await targetMember.setNickname(null).catch(() => {});
-
-            const rejectEmbed = new EmbedBuilder()
-                .setTitle('Verification Request Rejected')
-                .setColor(0xFF0000)
-                .setDescription(`Your verification request for **${interaction.guild.name}** was rejected.\n\n**Reason:** ${reason}`)
-                .setFooter({ text: 'Please contact staff or re-apply if you believe this was a mistake.' })
-                .setTimestamp();
-
-            try {
-                await targetMember.send({ embeds: [rejectEmbed] });
-                dmSent = true;
-            } catch (dmErr) {
-                console.log(`Could not send DM to ${targetMember.user.tag}. (DMs disabled by user)`);
-            }
+            // Save the rejection reason to display ephemerally when they try again
+            rejectionReasons.set(userId, reason);
         }
 
-        // Update the log embed in the log channel
+        // Update the log embed in staff channel
         try {
             const logChannel = interaction.channel;
             const logMessage = await logChannel.messages.fetch(logMsgId).catch(() => null);
@@ -658,11 +665,7 @@ client.on('interactionCreate', async interaction => {
             console.error('Error updating log message:', e);
         }
 
-        const responseMsg = dmSent 
-            ? 'Verification rejected and user was notified via Direct Message.'
-            : 'Verification rejected. (User has DMs closed so DM could not be delivered).';
-
-        return interaction.editReply(responseMsg);
+        return interaction.editReply('❌ Verification rejected. The user will see an ephemeral notification with your reason when they attempt to re-verify.');
     }
 
     // D. TICKET SETUP MODAL
