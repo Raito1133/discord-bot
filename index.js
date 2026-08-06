@@ -14,7 +14,8 @@ const {
   ModalBuilder,     
   TextInputBuilder,  
   TextInputStyle,
-  Partials
+  Partials,
+  MessageFlags
 } = require('discord.js');
 
 // --- ⚠️ CONFIGURATION ⚠️ ---
@@ -116,7 +117,17 @@ const commands = [
   { name: 'help', description: 'Show commands' },
   { name: 'userinfo', description: 'Get user info', options: [{ name: 'user', description: 'User', type: 6, required: false }] },
   { name: 'avatar', description: 'Get avatar of a user', options: [{ name: 'user', description: 'Select user', type: 6, required: false }] },
-  { name: 'welcome-setup', description: 'Setup welcome message', options: [{ name: 'channel', description: 'Channel', type: 7, required: true }, { name: 'message', description: 'Message', type: 3, required: false }, { name: 'type', description: 'Style', type: 3, required: false, choices: [{ name: 'Text', value: 'text' }, { name: 'Embed', value: 'embed' }] }, { name: 'image_url', description: 'Image Link (GIF/PNG) for Embed', type: 3, required: false }, { name: 'color', description: 'Hex Color (e.g. #FF0000)', type: 3, required: false }], default_member_permissions: '8' },
+  { 
+    name: 'setupchannels', 
+    description: 'Configure server system channels and welcome message', 
+    options: [
+      { name: 'welcome_channel', description: 'Welcome channel', type: 7, required: false },
+      { name: 'welcome_message', description: 'Welcome outer message (use <@USER> for mention)', type: 3, required: false },
+      { name: 'log_channel', description: 'Log channel', type: 7, required: false },
+      { name: 'boost_channel', description: 'Boost channel', type: 7, required: false }
+    ], 
+    default_member_permissions: '8' 
+  },
   { name: 'leave-setup', description: 'Setup leave message', options: [{ name: 'channel', description: 'Channel', type: 7, required: true }, { name: 'message', description: 'Message', type: 3, required: false }], default_member_permissions: '8' },
   { 
     name: 'ticketsetup', 
@@ -129,12 +140,13 @@ const commands = [
   },
   { 
     name: 'verify-setup', 
-    description: 'Setup the AQW Verification Panel with Guest and Guild roles', 
+    description: 'Setup the Verification Panel with V2 Layout', 
     options: [
       { name: 'channel', description: 'Where to post the verify buttons', type: 7, required: true },
       { name: 'log_channel', description: 'Where verification logs will go', type: 7, required: true },
       { name: 'guest_role', description: 'Role given to verified Guests', type: 8, required: true },
-      { name: 'member_role', description: 'Role given to verified Guild Members', type: 8, required: true }
+      { name: 'member_role', description: 'Role given to verified Guild Members', type: 8, required: true },
+      { name: 'banner_url', description: 'Banner Image URL', type: 3, required: false }
     ], 
     default_member_permissions: '8' 
   },
@@ -191,6 +203,25 @@ client.on('messageDelete', message => {
     author: message.author,
     image: message.attachments.first() ? message.attachments.first().proxyURL : null
   });
+});
+
+// --- MEMBER WELCOME LISTENER ---
+client.on(Events.GuildMemberAdd, async (member) => {
+  try {
+    const cfg = guildSettings.get(member.guild.id) || {};
+    const welcomeChannelId = cfg.welcomeChannelId;
+    if (!welcomeChannelId) return;
+
+    const welcomeChannel = member.guild.channels.cache.get(welcomeChannelId);
+    if (!welcomeChannel) return;
+
+    let welcomeMsg = cfg.welcomeMessage || 'Welcome to the server, <@USER>!';
+    const formattedMsg = welcomeMsg.replace(/<@USER>/g, `<@${member.id}>`);
+
+    await welcomeChannel.send({ content: formattedMsg });
+  } catch (err) {
+    console.error('Failed to send welcome message:', err);
+  }
 });
 
 // --- PREFIX HANDLER (!) ---
@@ -390,9 +421,8 @@ client.on('interactionCreate', async interaction => {
             )
         );
 
-        // If we already replied with the rejection notice, show Modal via followUp logic
         if (interaction.replied) {
-            return; // User saw the notice and can click the button again to open modal
+            return; 
         }
 
         return await interaction.showModal(modal);
@@ -509,6 +539,7 @@ client.on('interactionCreate', async interaction => {
         const logChannelId = parts[3];
         const guestRoleId = parts[4];
         const memberRoleId = parts[5];
+        const bannerUrl = parts.slice(6).join('_'); // Get banner URL if passed
 
         const title = interaction.fields.getTextInputValue('verify_title');
         const desc = interaction.fields.getTextInputValue('verify_desc');
@@ -521,24 +552,55 @@ client.on('interactionCreate', async interaction => {
         cfg.verifyMemberRoleId = memberRoleId;
         guildSettings.set(interaction.guildId, cfg);
 
-        const embed = new EmbedBuilder()
-            .setTitle(title)
-            .setDescription(desc)
-            .setColor(0x00FF00);
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('verify_type_guest')
-                .setLabel('Verify Guest')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('verify_type_member')
-                .setLabel('Verify Member')
-                .setStyle(ButtonStyle.Success)
-        );
+        // V2 Component verification panel layout updated to "Join Sindria"
+        const verifyPayload = {
+          components: [
+            {
+              type: 17,
+              accent_color: 0x8b0000,
+              components: [
+                {
+                  type: 12,
+                  items: [{ media: { url: bannerUrl || 'https://i.pinimg.com/originals/5d/d8/0f/5dd80fe00a06651f3200aea753987f50.gif' } }]
+                },
+                {
+                  type: 9,
+                  components: [
+                    {
+                      type: 10,
+                      content: `**${title}**\n\n${desc}`
+                    }
+                  ],
+                  accessory: {
+                    type: 2,
+                    style: 3,
+                    custom_id: 'verify_type_member',
+                    label: 'Verify'
+                  }
+                },
+                {
+                  type: 9,
+                  components: [
+                    {
+                      type: 10,
+                      content: `**Join Sindria**\n\nCome hang out with us in game, participate in guild-only events and screenshots. Click 'Join Sindria' to get started!`
+                    }
+                  ],
+                  accessory: {
+                    type: 2,
+                    style: 1,
+                    custom_id: 'verify_type_guest',
+                    label: 'Join Sindria'
+                  }
+                }
+              ]
+            }
+          ],
+          flags: MessageFlags.IsComponentsV2
+        };
 
         if (channel) {
-            await channel.send({ embeds: [embed], components: [row] });
+            await channel.send(verifyPayload);
             interaction.editReply(`Verification panel successfully posted to ${channel}!`);
         } else {
             interaction.editReply('❌ Could not find target channel.');
@@ -553,7 +615,6 @@ client.on('interactionCreate', async interaction => {
         const verifyType = interaction.customId.replace('aqw_verify_modal_', ''); // 'guest' or 'member'
         const ign = interaction.fields.getTextInputValue('aqw_name').trim();
         
-        // Handle Guild Name: Automatic 'Sindria' for Members, User Input for Guests
         let guildInput = 'Sindria';
         if (verifyType === 'guest') {
             guildInput = interaction.fields.getTextInputValue('aqw_guild')?.trim() || 'None';
@@ -635,11 +696,9 @@ client.on('interactionCreate', async interaction => {
 
         if (targetMember) {
             await targetMember.setNickname(null).catch(() => {});
-            // Save the rejection reason to display ephemerally when they try again
             rejectionReasons.set(userId, reason);
         }
 
-        // Update the log embed in staff channel
         try {
             const logChannel = interaction.channel;
             const logMessage = await logChannel.messages.fetch(logMsgId).catch(() => null);
@@ -792,23 +851,24 @@ client.on('interactionCreate', async interaction => {
         const logChannel = options.getChannel('log_channel');
         const guestRole = options.getRole('guest_role');
         const memberRole = options.getRole('member_role');
+        const bannerUrl = options.getString('banner_url') || 'https://i.pinimg.com/originals/5d/d8/0f/5dd80fe00a06651f3200aea753987f50.gif';
 
         const modal = new ModalBuilder()
-            .setCustomId(`verify_modal_${channel.id}_${logChannel.id}_${guestRole.id}_${memberRole.id}`)
+            .setCustomId(`verify_modal_${channel.id}_${logChannel.id}_${guestRole.id}_${memberRole.id}_${encodeURIComponent(bannerUrl)}`)
             .setTitle('Verification Panel Setup');
 
         const titleInput = new TextInputBuilder()
             .setCustomId('verify_title')
             .setLabel('Panel Title')
             .setStyle(TextInputStyle.Short)
-            .setValue('AQW Account Verification')
+            .setValue('Get access to the discord')
             .setRequired(true);
 
         const descInput = new TextInputBuilder()
             .setCustomId('verify_desc')
             .setLabel('Description (Shift + Enter supported!)')
             .setStyle(TextInputStyle.Paragraph)
-            .setValue('Click a button below to verify your AQW account and receive your role.')
+            .setValue('Verify by entering your AQW username, and get access to the rest of the discord. Click \'Verify\' to get started!')
             .setRequired(true);
 
         modal.addComponents(
@@ -880,18 +940,32 @@ client.on('interactionCreate', async interaction => {
         const description = options.getString('description');
         const color = options.getString('color') || '#0099FF';
         const image = options.getString('image');
-        const thumbnail = options.getString('thumbnail');
-        const footer = options.getString('footer');
         const targetChannel = options.getChannel('channel') || interaction.channel;
 
-        const embed = new EmbedBuilder().setColor(color);
-        if (title) embed.setTitle(title);
-        if (description) embed.setDescription(description.replace(/\\n/g, '\n'));
-        if (image) embed.setImage(image);
-        if (thumbnail) embed.setThumbnail(thumbnail);
-        if (footer) embed.setFooter({ text: footer });
+        const containerComponent = {
+          type: 17,
+          accent_color: parseInt(color.replace('#', ''), 16) || 0x8b0000,
+          components: [
+            {
+              type: 12,
+              items: [{ media: { url: image || 'https://i.pinimg.com/originals/5d/d8/0f/5dd80fe00a06651f3200aea753987f50.gif' } }]
+            },
+            {
+              type: 9,
+              components: [
+                {
+                  type: 10,
+                  content: `**${title || 'EMBED TITLE'}**\n\n${description ? description.replace(/\\n/g, '\n') : 'Embed description...'}`
+                }
+              ]
+            }
+          ]
+        };
 
-        await targetChannel.send({ embeds: [embed] });
+        await targetChannel.send({
+          components: [containerComponent],
+          flags: MessageFlags.IsComponentsV2
+        });
         interaction.editReply({ content: 'Embed sent!', ephemeral: true });
     }
     else if (commandName === 'ban') {
@@ -927,7 +1001,7 @@ client.on('interactionCreate', async interaction => {
             .addFields(
                 { name: 'Admin / Mod', value: '`ban`, `kick`, `mute`, `unmute`, `lock`, `unlock`, `purge`\n`deafen`, `undeafen`, `stick`, `unstick`\n`setprefix`, `talk`, `embed`, `uwulock`' },
                 { name: 'Public / Fun', value: '`ping`, `afk`, `snipe`, `userinfo`, `avatar`, `me`, `help`' },
-                { name: 'Setup (Slash Only)', value: '`/ticketsetup`, `/verify-setup`, `/welcome-setup`, `/leave-setup`\n`/autorole-setup`, `/autoreact-setup`\n`/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
+                { name: 'Setup (Slash Only)', value: '`/ticketsetup`, `/verify-setup`, `/setupchannels`, `/leave-setup`\n`/autorole-setup`, `/autoreact-setup`\n`/skullboard-setup`, `/reactionrole`, `/boost-setup`' }
             );
         interaction.editReply({embeds:[embed]});
     }
@@ -947,16 +1021,26 @@ client.on('interactionCreate', async interaction => {
         guildSettings.set(interaction.guildId, cfg);
         interaction.editReply(`Auto role set: **${role.name}**`);
     }
-    else if (commandName === 'welcome-setup') {
-        const ch = options.getChannel('channel');
+    else if (commandName === 'setupchannels') {
+        const welcomeCh = options.getChannel('welcome_channel');
+        const welcomeMsg = options.getString('welcome_message');
+        const logCh = options.getChannel('log_channel');
+        const boostCh = options.getChannel('boost_channel');
+
         const cfg = guildSettings.get(interaction.guildId) || {};
-        cfg.welcomeChannelId = ch.id;
-        cfg.welcomeMessage = options.getString('message');
-        cfg.welcomeType = options.getString('type');
-        cfg.welcomeImage = options.getString('image_url');
-        cfg.welcomeColor = options.getString('color');
+        if (welcomeCh) cfg.welcomeChannelId = welcomeCh.id;
+        if (welcomeMsg) cfg.welcomeMessage = welcomeMsg;
+        if (logCh) cfg.logChannelId = logCh.id;
+        if (boostCh) cfg.boostChannelId = boostCh.id;
         guildSettings.set(interaction.guildId, cfg);
-        interaction.editReply('Welcome message configured.');
+
+        let updates = [];
+        if (welcomeCh) updates.push(`Welcome Channel: ${welcomeCh}`);
+        if (welcomeMsg) updates.push(`Welcome Message: "${welcomeMsg}"`);
+        if (logCh) updates.push(`Log Channel: ${logCh}`);
+        if (boostCh) updates.push(`Boost Channel: ${boostCh}`);
+
+        interaction.editReply(`✅ Channels setup updated successfully!\n${updates.join('\n')}`);
     }
     else if (commandName === 'leave-setup') {
         const ch = options.getChannel('channel');
